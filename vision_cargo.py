@@ -46,6 +46,7 @@ class PiVideoStream: # from pyimagesearch
         # indicate that the thread should be stopped
         self.stopped = True
 
+# create window with trackbars to control the color range
 cv2.namedWindow("window")
 cv2.resizeWindow("window",400,2000)
 cv2.createTrackbar("H1","window",0,180,callback)
@@ -60,29 +61,38 @@ print ("starting stream")
 time.sleep(3) # camera sensor settling time
 
 while True:
+    
+    # Read an image from the camara
     image = vs.read()
 
+    # Convert the image HSV for colour checking
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
 
+    # Reading the current color value ranges
     hue1 = cv2.getTrackbarPos("H1","window")
     sat1 = cv2.getTrackbarPos("S1","window")
     value1 = cv2.getTrackbarPos("V1","window")
     hue2 = cv2.getTrackbarPos("H2","window")
     sat2 = cv2.getTrackbarPos("S2","window")
     value2 = cv2.getTrackbarPos("V2","window")
-    
+
+    # Convert color value ranges into array 
     color1 = np.array([hue1,sat1,value1])
     color2 = np.array([hue2,sat2,value2])
-
+    
+    # Identify the color by checking the pixel
     mask = cv2.inRange(hsv,color1,color2)
     
+    # Update all the images
     cv2.imshow("RPiVideo",image)
     cv2.imshow("HSV",hsv)
     cv2.imshow("Mask",mask)
 
+    # If Esc key is pressed exit program
     key = cv2.waitKey(1)
     if key == 27:
         break
 
+# Cleanup
 cv2.destroyAllWindows()
 vs.stop()
