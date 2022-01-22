@@ -8,12 +8,24 @@ import numpy as np
 def callback(pos):
     pass
 
+def read_color():
+    # reading the current colour value ranges
+    hue1 = cv2.getTrackbarPos("H1","window")
+    sat1 = cv2.getTrackbarPos("S1","window")
+    value1 = cv2.getTrackbarPos("V1","window")
+    hue2 = cv2.getTrackbarPos("H2","window")
+    sat2 = cv2.getTrackbarPos("S2","window")
+    value2 = cv2.getTrackbarPos("V2","window")
+    return(hue1, sat1, value1, hue2, sat2, value2)
+
+
 class PiVideoStream: # from pyimagesearch
     def __init__(self, resolution=(640, 480), framerate=40):
         # initialize the camera and stream
         self.camera = PiCamera()
         self.camera.resolution = resolution
         self.camera.framerate = framerate
+        self.camera.brightness = 70
         self.rawCapture = PiRGBArray(self.camera, size=resolution)
         self.stream = self.camera.capture_continuous(self.rawCapture,
             format="bgr", use_video_port=True)
@@ -62,37 +74,32 @@ time.sleep(3) # camera sensor settling time
 
 while True:
     
-    # Read an image from the camara
+    # read an image from the camara
     image = vs.read()
 
-    # Convert the image HSV for colour checking
+    # convert the image HSV for colour checking
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
 
-    # Reading the current color value ranges
-    hue1 = cv2.getTrackbarPos("H1","window")
-    sat1 = cv2.getTrackbarPos("S1","window")
-    value1 = cv2.getTrackbarPos("V1","window")
-    hue2 = cv2.getTrackbarPos("H2","window")
-    sat2 = cv2.getTrackbarPos("S2","window")
-    value2 = cv2.getTrackbarPos("V2","window")
+    # read current color ranges
+    (h1,s1,v1,h2,s2,v2) = read_color()
 
-    # Convert color value ranges into array 
-    color1 = np.array([hue1,sat1,value1])
-    color2 = np.array([hue2,sat2,value2])
+    # convert color value ranges into array 
+    color1 = np.array([h1,s1,v1])
+    color2 = np.array([h2,s2,v2])
     
-    # Identify the color by checking the pixel
+    # identify the color by checking the pixel
     mask = cv2.inRange(hsv,color1,color2)
     
-    # Update all the images
+    # update all the images
     cv2.imshow("RPiVideo",image)
     cv2.imshow("HSV",hsv)
     cv2.imshow("Mask",mask)
 
-    # If Esc key is pressed exit program
+    # if Esc key is pressed exit program
     key = cv2.waitKey(1)
     if key == 27:
         break
 
-# Cleanup
+# cleanup
 cv2.destroyAllWindows()
 vs.stop()
