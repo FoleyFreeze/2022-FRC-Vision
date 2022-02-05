@@ -6,22 +6,73 @@ from threading import Thread
 import time
 import numpy as np
 import PySimpleGUI as sg
+import configparser
+
+DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
+PARAMETERS_FILENAME = "default-params.ini"
 
 def callback(pos):
     pass
 
+
 def read_color():
     # reading the current colour value ranges
-    hue1 = cv2.getTrackbarPos("H1","window")
-    sat1 = cv2.getTrackbarPos("S1","window")
-    value1 = cv2.getTrackbarPos("V1","window")
-    hue2 = cv2.getTrackbarPos("H2","window")
-    sat2 = cv2.getTrackbarPos("S2","window")
-    value2 = cv2.getTrackbarPos("V2","window")
+    hue1 = cv2.getTrackbarPos("H1","trackbars")
+    sat1 = cv2.getTrackbarPos("S1","trackbars")
+    value1 = cv2.getTrackbarPos("V1","trackbars")
+    hue2 = cv2.getTrackbarPos("H2","trackbars")
+    sat2 = cv2.getTrackbarPos("S2","trackbars")
+    value2 = cv2.getTrackbarPos("V2","trackbars")
     return(hue1, sat1, value1, hue2, sat2, value2)
 
-def write_colors_file(file,h1,s1,v1,h2,s2,v2):
-    print(file)
+def write_params_file(file):
+    print("Writing parameter file " + file)
+    config = configparser.ConfigParser()
+    config.add_section('params_section')
+    config['params_section']['H1'] = str(cv2.getTrackbarPos("H1","trackbars"))
+    config['params_section']['S1'] = str(cv2.getTrackbarPos("S1","trackbars"))
+    config['params_section']['V1'] = str(cv2.getTrackbarPos("V1","trackbars"))
+    config['params_section']['H2'] = str(cv2.getTrackbarPos("H2","trackbars"))
+    config['params_section']['S2'] = str(cv2.getTrackbarPos("S2","trackbars"))
+    config['params_section']['V2'] = str(cv2.getTrackbarPos("V2","trackbars"))
+    config['params_section']['min cargo area'] = str(cv2.getTrackbarPos("min cargo area","trackbars"))
+    with open(file, 'w') as configfile:
+        config.write(configfile)
+
+def process_user_key():
+    #if Esc key is pressed exit program
+    key = cv2.waitKey(1)
+    if (key == 27):
+        return True
+    elif (key == 119): # if 'w' key save values 
+        values_file = sg.popup_get_file("parameters")
+        if not values_file:
+            values_file = DEFAULT_PARAMETERS_FILENAME 
+        write_params_file(values_file)
+        return False
+    else:
+        return False 
+
+def read_params_file(file):
+    print("reading parameter file " + file)
+    config = configparser.ConfigParser()
+    with open(file, 'r') as configfile:
+        config.read_file(configfile)
+    
+    hue1 = config['params_section']['H1']
+    cv2.setTrackbarPos("H1","trackbars",int(hue1))
+    sat1 = config['params_section']['S1']
+    cv2.setTrackbarPos("S1","trackbars",int(sat1))
+    value1 = config['params_section']['V1']
+    cv2.setTrackbarPos("V1","trackbars",int(value1))
+    hue2 = config['params_section']['H2']
+    cv2.setTrackbarPos("H2","trackbars",int(hue2))
+    sat2 = config['params_section']['S2']
+    cv2.setTrackbarPos("S2","trackbars",int(sat2))
+    value2 = config['params_section']['V2']
+    cv2.setTrackbarPos("V2","trackbars",int(value2))
+    area = config['params_section']['min cargo area']
+    cv2.setTrackbarPos("min cargo area","trackbars",int(area))
 
 class PiVideoStream: # from pyimagesearch
     def __init__(self, resolution=(640, 480), framerate=40):
@@ -62,18 +113,20 @@ class PiVideoStream: # from pyimagesearch
         # indicate that the thread should be stopped
         self.stopped = True
 
+# START
+
 # create window with trackbars to control the color range
-cv2.namedWindow("window")
-cv2.resizeWindow("window",600,800)
-cv2.createTrackbar("H1","window",0,180,callback)
-cv2.createTrackbar("S1","window",0,255,callback)
-cv2.createTrackbar("V1","window",0,255,callback)
-cv2.createTrackbar("H2","window",0,180,callback)
-cv2.createTrackbar("S2","window",0,255,callback)
-cv2.createTrackbar("V2","window",0,255,callback)
-cv2.createTrackbar("min cargo area","window",0,100,callback)
-cv2.createTrackbar("color window save","window",0,1,callback)
-cv2.setTrackbarPos("color window save", "window", 0)
+cv2.namedWindow("trackbars")
+cv2.resizeWindow("trackbars",600,800)
+cv2.createTrackbar("H1","trackbars",0,180,callback)
+cv2.createTrackbar("S1","trackbars",0,255,callback)
+cv2.createTrackbar("V1","trackbars",0,255,callback)
+cv2.createTrackbar("H2","trackbars",0,180,callback)
+cv2.createTrackbar("S2","trackbars",0,255,callback)
+cv2.createTrackbar("V2","trackbars",0,255,callback)
+cv2.createTrackbar("min cargo area","trackbars",0,100,callback)
+
+read_params_file(PARAMETERS_FILENAME)
 
 vs = PiVideoStream().start() # create camera object and start reading images
 print ("starting stream")
@@ -90,7 +143,7 @@ while True:
     # read current color ranges
     (h1,s1,v1,h2,s2,v2) = read_color()
 
-    min_cargo_area = cv2.getTrackbarPos("min cargo area","window")
+    min_cargo_area = cv2.getTrackbarPos("min cargo area","trackbars")
 
     # convert color value ranges into array 
     color1 = np.array([h1,s1,v1])
@@ -107,7 +160,7 @@ while True:
         approx = cv2.approxPolyDP(c,0.02,True)
         area = cv2.contourArea(c)
         if (len(approx) > 5 and area > min_cargo_area):
-            (x,y),radius = cv2.minEnclosingCircle(c)
+            (x,y),radius = cv2.minEnclosingCircle(approx)
             center = (int(x),int(y))
             radius = int(radius)
             cv2.circle(image,center,radius,(0,255,0),3)
@@ -117,18 +170,9 @@ while True:
     cv2.imshow("HSV",hsv)
     cv2.imshow("Mask",mask)
 
-    save_colors =  cv2.getTrackbarPos("color window save","window")
-    if save_colors == 1:
-        values_file = sg.popup_get_file("color values file")
-        if not values_file:
-            values_file = "default"
-        write_colors_file(values_file,h1,s1,v1,h2,s2,v2)
-    cv2.setTrackbarPos("color window save", "window", 0)
-
-    # if Esc key is pressed exit program
-    key = cv2.waitKey(1)
-    if key == 27:
+    if process_user_key() == True:
         break
+        
 
 # cleanup
 cv2.destroyAllWindows()
