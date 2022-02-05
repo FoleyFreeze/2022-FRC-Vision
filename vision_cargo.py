@@ -124,7 +124,7 @@ cv2.createTrackbar("V1","trackbars",0,255,callback)
 cv2.createTrackbar("H2","trackbars",0,180,callback)
 cv2.createTrackbar("S2","trackbars",0,255,callback)
 cv2.createTrackbar("V2","trackbars",0,255,callback)
-cv2.createTrackbar("min cargo area","trackbars",0,100,callback)
+cv2.createTrackbar("min cargo area","trackbars",0,500,callback)
 
 read_params_file(PARAMETERS_FILENAME)
 
@@ -157,13 +157,22 @@ while True:
 
     for c in contours:
         perim = cv2.arcLength(c,True)
-        approx = cv2.approxPolyDP(c,0.02,True)
-        area = cv2.contourArea(c)
-        if (len(approx) > 5 and area > min_cargo_area):
+        #a = np.linspace(0.001, 0.10, 50)
+        # # for i in a:
+        approx = cv2.approxPolyDP(c, 0.03 * perim ,True)
+        #area = cv2.contourArea(approx)
+        #if ((len(approx) == 7 or len(approx) == 6) and area > min_cargo_area):
+        if (len(approx) == 7 or len(approx) == 6):
             (x,y),radius = cv2.minEnclosingCircle(approx)
             center = (int(x),int(y))
             radius = int(radius)
             cv2.circle(image,center,radius,(0,255,0),3)
+            #for debugging min area
+            #_ = cv2.putText(image, str(area), center, cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255) , 3 , cv2.LINE_AA)
+            #for debugging number of vertices
+            #_ = cv2.putText(image, str(len(approx)), center, cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255) , 3 , cv2.LINE_AA)
+                #print(i)
+                #print(len(approx))
     
     # update all the images
     cv2.imshow("RPiVideo",image)
