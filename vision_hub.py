@@ -1,4 +1,5 @@
 #!/usr/bin/python3.9
+from calendar import c
 import cv2
 from picamera.array import PiRGBArray
 from picamera import PiCamera
@@ -10,6 +11,58 @@ import configparser
 
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
 PARAMETERS_FILENAME = "Latest working params"
+LOAD_FILE = True
+
+def look_up_distance(y_pixel):
+    pass #to do
+
+def calc_angle_of(x_pixel):
+    pass #to do
+
+def output_data(d,a_to):
+    pass #to do
+
+def find_min_x(contours):
+    min_x = 999
+    min_x_index = -1
+    c_index = -1
+
+    for c in range(len(contours)):
+        for p in range(len(c[p])):
+            if (contours[c][p][0] < min_x):
+                min_x = contours[c][p][0]
+                min_x_index = p
+                c_index = c
+
+    return c_index, min_x_index
+
+def find_max_x(contours):
+    max_x = -1
+    max_x_index = -1
+    c_index = -1
+
+    for c in range(len(contours)):
+        for p in range(len(c[p])):
+            if (contours[c][p][0] > max_x):
+                max_x = contours[c][p][0]
+                max_x_index = p
+                c_index = c
+
+    return c_index, max_x_index
+
+def find_min_y(contours):
+    min_y = 999
+    min_y_index = -1
+    c_index = -1
+
+    for c in range(len(contours)):
+        for p in range(len(c[p])):
+            if (contours[c][p][1] < min_y):
+                min_y = contours[c][p][1]
+                min_y_index = p
+                c_index = c
+
+    return c_index, min_y_index
 
 def callback(pos):
     pass
@@ -40,7 +93,7 @@ def write_params_file(file):
     with open(file, 'w') as configfile:
         config.write(configfile)
 
-def process_user_key():
+def process_user_key(img):
     #if Esc key is pressed exit program
     key = cv2.waitKey(1)
     if (key == 27):
@@ -50,6 +103,9 @@ def process_user_key():
         if not values_file:
             values_file = DEFAULT_PARAMETERS_FILENAME 
         write_params_file(values_file)
+        return False
+    elif (key == 109):
+        cv2.imwrite("mask.jpg", img)
         return False
     else:
         return False 
@@ -145,7 +201,7 @@ time.sleep(3) # camera sensor settling time
 callback_set = False
 
 while True:
-    
+
     # read an image from the camara
     image = vs.read()
 
@@ -155,46 +211,55 @@ while True:
     # read current color ranges
     (h1,s1,v1,h2,s2,v2) = read_color()
 
-    #min_cargo_area = cv2.getTrackbarPos("min cargo area","trackbars")
+    # min_cargo_area = cv2.getTrackbarPos("min cargo area","trackbars")
 
     # convert color value ranges into array 
     color1 = np.array([h1,s1,v1])
     color2 = np.array([h2,s2,v2])  
     # identify the color by checking the pixel
     mask = cv2.inRange(hsv,color1,color2)
+    
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
+    cleaner_mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-    '''contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    contours,_ = cv2.findContours(cleaner_mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     #cv2.drawContours(image, contours, -1, (0,255,0), 3)
 
-    for c in contours:
-        perim = cv2.arcLength(c,True)
-        #a = np.linspace(0.001, 0.10, 50)
-        # # for i in a:
-        approx = cv2.approxPolyDP(c, 0.03 * perim ,True)
-        #area = cv2.contourArea(approx)
-        #if ((len(approx) == 7 or len(approx) == 6) and area > min_cargo_area):
-        if (len(approx) == 7 or len(approx) == 6):
-            (x,y),radius = cv2.minEnclosingCircle(approx)
-            center = (int(x),int(y))
-            radius = int(radius)
-            cv2.circle(image,center,radius,(0,255,0),3)
-            #for debugging min area
-            #_ = cv2.putText(image, str(area), center, cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255) , 3 , cv2.LINE_AA)
-            #for debugging number of vertices
-            #_ = cv2.putText(image, str(len(approx)), center, cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255) , 3 , cv2.LINE_AA)
-                #print(i)
-                #print(len(approx))'''
+    num_contours = len(contours)
+    print(num_contours)
+    if (len(contours) == 5):
+
+        # find tapes of interest
+        c_min_x, p_min_x = find_min_x(contours)
+        c_max_x, p_max_x = find_max_x(contours)
+        c_min_y, p_min_y = find_min_y(contours)
+    
+        cam_distance = look_up_distance(p_min_y)
+        cam_angle_to = calc_angle_of(contours[c_min_y][p_min_y][0]) # x coordinate of min pixel value
+
+        output_data(cam_distance,cam_angle_to)
+
+        # draw hub target
+        x_min_x = contours[c_min_x][p_min_x][0]
+        y_min_x = contours[c_min_x][p_min_x][1]
+        x_min_y = contours[c_min_y][p_min_y][0]
+        y_min_y = contours[c_min_y][p_min_y][1]
+        x_max_x = contours[c_max_x][p_max_x][0]
+        y_max_y = contours[c_max_x][p_max_x][1]
+        pts = np.array([[x_min_x,y_min_x],[x_min_y,y_min_y],[x_max_x,y_max_y]], np.int32)
+        image = cv2.polylines(image, [pts], True, (0,0,255), 3)
 
     # update all the images
     cv2.imshow("RPiVideo",image)
     #cv2.imshow("HSV",hsv)
-    cv2.imshow("Mask",mask)
+    #cv2.imshow("Mask",mask)
+    cv2.imshow("Clean Mask",cleaner_mask)
 
     if(callback_set == False):
         cv2.setMouseCallback("RPiVideo", show_x_and_y)
         callback_set = True
 
-    if process_user_key() == True:
+    if process_user_key(mask) == True:
         break
         
 
