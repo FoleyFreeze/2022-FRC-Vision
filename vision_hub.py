@@ -12,12 +12,17 @@ import configparser
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
 PARAMETERS_FILENAME = "Latest working params"
 LOAD_FILE = True
+HORIZONTAL_FOV = 90
+PIXEL_WIDTH = 800
+PIXEL_HEIGHT = 600
+HORIZONTAL_PIXEL_WIDTH_CENTER = (PIXEL_WIDTH / 2) - 0.5
+DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
 
 def look_up_distance(y_pixel):
     pass #to do
 
 def calc_angle_of(x_pixel):
-    pass #to do
+    return (x_pixel - HORIZONTAL_PIXEL_WIDTH_CENTER) * DEGREES_PER_PIXEL
 
 def output_data(d,a_to):
     pass #to do
@@ -28,11 +33,12 @@ def find_min_x(contours):
     c_index = -1
 
     for c in range(len(contours)):
-        for p in range(len(c[p])):
-            if (contours[c][p][0] < min_x):
-                min_x = contours[c][p][0]
-                min_x_index = p
-                c_index = c
+        for p in range(len(contours[c])):
+            for x,y in (contours[c][p]):
+                if (x < min_x):
+                    min_x = x
+                    min_x_index = p
+                    c_index = c
 
     return c_index, min_x_index
 
@@ -42,11 +48,12 @@ def find_max_x(contours):
     c_index = -1
 
     for c in range(len(contours)):
-        for p in range(len(c[p])):
-            if (contours[c][p][0] > max_x):
-                max_x = contours[c][p][0]
-                max_x_index = p
-                c_index = c
+        for p in range(len(contours[c])):
+            for x,y in (contours[c][p]):
+                if ( x > max_x):
+                    max_x = x
+                    max_x_index = p
+                    c_index = c
 
     return c_index, max_x_index
 
@@ -56,11 +63,12 @@ def find_min_y(contours):
     c_index = -1
 
     for c in range(len(contours)):
-        for p in range(len(c[p])):
-            if (contours[c][p][1] < min_y):
-                min_y = contours[c][p][1]
-                min_y_index = p
-                c_index = c
+        for p in range(len(contours[c])):
+            for x,y in (contours[c][p]):
+                if ( y < min_y):
+                    min_y = y
+                    min_y_index = p
+                    c_index = c
 
     return c_index, min_y_index
 
@@ -132,7 +140,7 @@ def read_params_file(file):
     cv2.setTrackbarPos("min cargo area","trackbars",int(area))
 
 class PiVideoStream: # from pyimagesearch
-    def __init__(self, resolution=(800, 600), framerate=40, brightness=54, \
+    def __init__(self, resolution=(PIXEL_WIDTH, PIXEL_HEIGHT), framerate=40, brightness=54, \
         contrast=100, sharpness=100, exposure_compensation=-18, saturation=100):
         # initialize the camera and stream
         self.camera = PiCamera()
@@ -225,8 +233,6 @@ while True:
     contours,_ = cv2.findContours(cleaner_mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     #cv2.drawContours(image, contours, -1, (0,255,0), 3)
 
-    num_contours = len(contours)
-    print(num_contours)
     if (len(contours) == 5):
 
         # find tapes of interest
@@ -235,17 +241,20 @@ while True:
         c_min_y, p_min_y = find_min_y(contours)
     
         cam_distance = look_up_distance(p_min_y)
-        cam_angle_to = calc_angle_of(contours[c_min_y][p_min_y][0]) # x coordinate of min pixel value
+        cam_angle_to = calc_angle_of(contours[c_min_y][p_min_y][0]) # x coordinate of min y-pixel value
 
         output_data(cam_distance,cam_angle_to)
 
         # draw hub target
-        x_min_x = contours[c_min_x][p_min_x][0]
-        y_min_x = contours[c_min_x][p_min_x][1]
-        x_min_y = contours[c_min_y][p_min_y][0]
-        y_min_y = contours[c_min_y][p_min_y][1]
-        x_max_x = contours[c_max_x][p_max_x][0]
-        y_max_y = contours[c_max_x][p_max_x][1]
+        x_min_x = contours[c_min_x][p_min_x][0][0]
+        y_min_x = contours[c_min_x][p_min_x][0][1]
+
+        x_min_y = contours[c_min_y][p_min_y][0][0]
+        y_min_y = contours[c_min_y][p_min_y][0][1]
+
+        x_max_x = contours[c_max_x][p_max_x][0][0]
+        y_max_y = contours[c_max_x][p_max_x][0][1]
+
         pts = np.array([[x_min_x,y_min_x],[x_min_y,y_min_y],[x_max_x,y_max_y]], np.int32)
         image = cv2.polylines(image, [pts], True, (0,0,255), 3)
 
