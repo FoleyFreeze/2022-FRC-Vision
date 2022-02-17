@@ -10,7 +10,7 @@ import PySimpleGUI as sg
 import configparser
 
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
-PARAMETERS_FILENAME = "Latest working params"
+PARAMETERS_FILENAME = "kind of working params(cloudy)"
 LOAD_FILE = True
 HORIZONTAL_FOV = 90
 PIXEL_WIDTH = 800
@@ -18,13 +18,28 @@ PIXEL_HEIGHT = 600
 HORIZONTAL_PIXEL_WIDTH_CENTER = (PIXEL_WIDTH / 2) - 0.5
 DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
 
+def brightness_callback(pos):
+    vs.set_brightness(pos)
+
+def saturation_callback(pos):
+    vs.set_saturation(pos)
+
+def exposure_callback(pos):
+    vs.set_exposure(pos)
+
+def contrast_callback(pos):
+    vs.set_contrast(pos)
+
+def sharpness_callback(pos):
+    vs.set_sharpness(pos)
+
 def look_up_distance(y_pixel):
     pass #to do
 
 def calc_angle_of(x_pixel):
     return (x_pixel - HORIZONTAL_PIXEL_WIDTH_CENTER) * DEGREES_PER_PIXEL
 
-def output_data(d,a_to):
+def output_data(d,a_of):
     pass #to do
 
 def find_min_x(contours):
@@ -78,12 +93,12 @@ def callback(pos):
 
 def read_color():
     # reading the current colour value ranges
-    hue1 = cv2.getTrackbarPos("H1","trackbars")
-    sat1 = cv2.getTrackbarPos("S1","trackbars")
-    value1 = cv2.getTrackbarPos("V1","trackbars")
-    hue2 = cv2.getTrackbarPos("H2","trackbars")
-    sat2 = cv2.getTrackbarPos("S2","trackbars")
-    value2 = cv2.getTrackbarPos("V2","trackbars")
+    hue1 = cv2.getTrackbarPos("H1","app config")
+    sat1 = cv2.getTrackbarPos("S1","app config")
+    value1 = cv2.getTrackbarPos("V1","app config")
+    hue2 = cv2.getTrackbarPos("H2","app config")
+    sat2 = cv2.getTrackbarPos("S2","app config")
+    value2 = cv2.getTrackbarPos("V2","app config")
     return(hue1, sat1, value1, hue2, sat2, value2)
 
 # for writing parameters file to be used upon next run
@@ -91,13 +106,13 @@ def write_params_file(file):
     print("Writing parameter file " + file)
     config = configparser.ConfigParser()
     config.add_section('params_section')
-    config['params_section']['H1'] = str(cv2.getTrackbarPos("H1","trackbars"))
-    config['params_section']['S1'] = str(cv2.getTrackbarPos("S1","trackbars"))
-    config['params_section']['V1'] = str(cv2.getTrackbarPos("V1","trackbars"))
-    config['params_section']['H2'] = str(cv2.getTrackbarPos("H2","trackbars"))
-    config['params_section']['S2'] = str(cv2.getTrackbarPos("S2","trackbars"))
-    config['params_section']['V2'] = str(cv2.getTrackbarPos("V2","trackbars"))
-    config['params_section']['min cargo area'] = str(cv2.getTrackbarPos("min cargo area","trackbars"))
+    config['params_section']['H1'] = str(cv2.getTrackbarPos("H1","app config"))
+    config['params_section']['S1'] = str(cv2.getTrackbarPos("S1","app config"))
+    config['params_section']['V1'] = str(cv2.getTrackbarPos("V1","app config"))
+    config['params_section']['H2'] = str(cv2.getTrackbarPos("H2","app config"))
+    config['params_section']['S2'] = str(cv2.getTrackbarPos("S2","app config"))
+    config['params_section']['V2'] = str(cv2.getTrackbarPos("V2","app config"))
+    config['params_section']['min cargo area'] = str(cv2.getTrackbarPos("min cargo area","app config"))
     with open(file, 'w') as configfile:
         config.write(configfile)
 
@@ -125,23 +140,23 @@ def read_params_file(file):
         config.read_file(configfile)
     
     hue1 = config['params_section']['H1']
-    cv2.setTrackbarPos("H1","trackbars",int(hue1))
+    cv2.setTrackbarPos("H1","app config",int(hue1))
     sat1 = config['params_section']['S1']
-    cv2.setTrackbarPos("S1","trackbars",int(sat1))
+    cv2.setTrackbarPos("S1","app config",int(sat1))
     value1 = config['params_section']['V1']
-    cv2.setTrackbarPos("V1","trackbars",int(value1))
+    cv2.setTrackbarPos("V1","app config",int(value1))
     hue2 = config['params_section']['H2']
-    cv2.setTrackbarPos("H2","trackbars",int(hue2))
+    cv2.setTrackbarPos("H2","app config",int(hue2))
     sat2 = config['params_section']['S2']
-    cv2.setTrackbarPos("S2","trackbars",int(sat2))
+    cv2.setTrackbarPos("S2","app config",int(sat2))
     value2 = config['params_section']['V2']
-    cv2.setTrackbarPos("V2","trackbars",int(value2))
+    cv2.setTrackbarPos("V2","app config",int(value2))
     area = config['params_section']['min cargo area']
-    cv2.setTrackbarPos("min cargo area","trackbars",int(area))
+    cv2.setTrackbarPos("min cargo area","app config",int(area))
 
 class PiVideoStream: # from pyimagesearch
     def __init__(self, resolution=(PIXEL_WIDTH, PIXEL_HEIGHT), framerate=40, brightness=54, \
-        contrast=100, sharpness=100, exposure_compensation=-18, saturation=100):
+        contrast=100, sharpness=100, exposure_compensation=-12, saturation=100):
         # initialize the camera and stream
         self.camera = PiCamera()
         self.camera.resolution = resolution
@@ -151,6 +166,7 @@ class PiVideoStream: # from pyimagesearch
         self.camera.sharpness = sharpness # between -100 and 100 (0 is default)
         self.camera.exposure_compensation = exposure_compensation # Each increment represents 1/6th of a stop. -25 and 25 (0 is default)
         self.camera.saturation = saturation #-100 to 100 (0 is default)
+        self.camera.awb_mode = 'cloudy'
         self.rawCapture = PiRGBArray(self.camera, size=resolution)
         self.stream = self.camera.capture_continuous(self.rawCapture,
             format="bgr", use_video_port=True)
@@ -182,6 +198,21 @@ class PiVideoStream: # from pyimagesearch
     def stop(self):
         # indicate that the thread should be stopped
         self.stopped = True
+    def set_brightness(self,setting):
+        self.camera.brightness = setting
+        time.sleep(3)
+    def set_contrast(self,setting):
+        self.camera.contrast = setting
+        time.sleep(3)
+    def set_exposure(self,setting):
+        self.camera.exposure = setting
+        time.sleep(3)
+    def set_sharpness(self,setting):
+        self.camera.sharpness = setting
+        time.sleep(3)
+    def set_saturation(self,setting):
+        self.camera.saturation = setting
+        time.sleep(3)
 
 def show_x_and_y(event, x, y, flags, userdata):
     if event == cv2.EVENT_LBUTTONDOWN:
@@ -190,15 +221,22 @@ def show_x_and_y(event, x, y, flags, userdata):
 # START
 
 # create window with trackbars to control the color range
-cv2.namedWindow("trackbars")
-cv2.resizeWindow("trackbars",600,800)
-cv2.createTrackbar("H1","trackbars",0,180,callback)
-cv2.createTrackbar("S1","trackbars",0,255,callback)
-cv2.createTrackbar("V1","trackbars",0,255,callback)
-cv2.createTrackbar("H2","trackbars",0,180,callback)
-cv2.createTrackbar("S2","trackbars",0,255,callback)
-cv2.createTrackbar("V2","trackbars",0,255,callback)
-cv2.createTrackbar("min cargo area","trackbars",0,500,callback)
+cv2.namedWindow("app config")
+cv2.resizeWindow("app config",600,800)
+cv2.createTrackbar("H1","app config",0,180,callback)
+cv2.createTrackbar("S1","app config",0,255,callback)
+cv2.createTrackbar("V1","app config",0,255,callback)
+cv2.createTrackbar("H2","app config",0,180,callback)
+cv2.createTrackbar("S2","app config",0,255,callback)
+cv2.createTrackbar("V2","app config",0,255,callback)
+cv2.createTrackbar("min cargo area","app config",0,500,callback)
+cv2.namedWindow("camera config")
+cv2.resizeWindow("camera config",600,800)
+cv2.createTrackbar("brightness","camera config",0,100,brightness_callback)
+cv2.createTrackbar("saturation","camera config",-100,100,saturation_callback)
+cv2.createTrackbar("exposure","camera config",-25,25,exposure_callback)
+cv2.createTrackbar("contrast","camera config",-100,100,contrast_callback)
+cv2.createTrackbar("sharpness","camera config",-100,100,sharpness_callback)
 
 read_params_file(PARAMETERS_FILENAME)
 
@@ -210,6 +248,9 @@ callback_set = False
 
 while True:
 
+    image = None
+    mask = None
+
     # read an image from the camara
     image = vs.read()
 
@@ -219,31 +260,33 @@ while True:
     # read current color ranges
     (h1,s1,v1,h2,s2,v2) = read_color()
 
-    # min_cargo_area = cv2.getTrackbarPos("min cargo area","trackbars")
+    # min_cargo_area = cv2.getTrackbarPos("min cargo area","app config")
 
     # convert color value ranges into array 
     color1 = np.array([h1,s1,v1])
     color2 = np.array([h2,s2,v2])  
     # identify the color by checking the pixel
     mask = cv2.inRange(hsv,color1,color2)
+    cv2.imshow("Mask",mask)
     
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
-    cleaner_mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
+    # cleaner_mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-    contours,_ = cv2.findContours(cleaner_mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     #cv2.drawContours(image, contours, -1, (0,255,0), 3)
 
-    if (len(contours) == 5):
+    l = len(contours)
+    if (l == 5 or l == 4):
 
         # find tapes of interest
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
         c_min_y, p_min_y = find_min_y(contours)
     
-        cam_distance = look_up_distance(p_min_y)
-        cam_angle_to = calc_angle_of(contours[c_min_y][p_min_y][0]) # x coordinate of min y-pixel value
+        cam_distance = look_up_distance(contours[c_min_y][p_min_y][0][1]) # y coordinate of min y-pixel value
+        cam_angle_of = calc_angle_of(contours[c_min_y][p_min_y][0][0]) # x coordinate of min y-pixel value
 
-        output_data(cam_distance,cam_angle_to)
+        output_data(cam_distance,cam_angle_of)
 
         # draw hub target
         x_min_x = contours[c_min_x][p_min_x][0][0]
@@ -257,12 +300,12 @@ while True:
 
         pts = np.array([[x_min_x,y_min_x],[x_min_y,y_min_y],[x_max_x,y_max_y]], np.int32)
         image = cv2.polylines(image, [pts], True, (0,0,255), 3)
+        #cv2.circle(image, (x_min_y,y_min_y), 20, (0,0,255), 3)
 
     # update all the images
     cv2.imshow("RPiVideo",image)
-    #cv2.imshow("HSV",hsv)
-    #cv2.imshow("Mask",mask)
-    cv2.imshow("Clean Mask",cleaner_mask)
+    cv2.imshow("Mask",mask)
+    #cv2.imshow("Clean Mask",cleaner_mask)
 
     if(callback_set == False):
         cv2.setMouseCallback("RPiVideo", show_x_and_y)
@@ -271,7 +314,6 @@ while True:
     if process_user_key(mask) == True:
         break
         
-
 # cleanup
 cv2.destroyAllWindows()
 vs.stop()
