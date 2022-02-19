@@ -1,5 +1,6 @@
 #!/usr/bin/python3.9
 from calendar import c
+from tkinter import Y
 import cv2
 from picamera.array import PiRGBArray
 from picamera import PiCamera
@@ -13,31 +14,29 @@ DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
 PARAMETERS_FILENAME = "kind of working params(cloudy)"
 LOAD_FILE = True
 HORIZONTAL_FOV = 90
+# From refernce drawing:
+# https://www.uctronics.com/arducam-90-degree-wide-angle-1-2-3-m12-mount-with-lens-adapter-for-raspberry-pi-high-quality-camera.html
+# arctan (4.92/2) /3.28 = 36.86989765, for half the verical
+# then 2x for the full veritcal => 36.86989765 * 2 = 73.7397953 => 74 
+VERTICAL_FOV = 74
 PIXEL_WIDTH = 800
 PIXEL_HEIGHT = 600
-HORIZONTAL_PIXEL_WIDTH_CENTER = (PIXEL_WIDTH / 2) - 0.5
-DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
+HORIZONTAL_PIXEL_CENTER = (PIXEL_WIDTH / 2) - 0.5
+VERTICAL_PIXEL_CENTER = (PIXEL_HEIGHT / 2) - 0.5 
+HORIZONTAL_DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
+VERTICAL_DEGREES_PER_PIXEL = VERTICAL_FOV / PIXEL_HEIGHT
 
-def brightness_callback(pos):
-    vs.set_brightness(pos)
-
-def saturation_callback(pos):
-    vs.set_saturation(pos)
-
-def exposure_callback(pos):
-    vs.set_exposure(pos)
-
-def contrast_callback(pos):
-    vs.set_contrast(pos)
-
-def sharpness_callback(pos):
-    vs.set_sharpness(pos)
-
-def look_up_distance(y_pixel):
+def look_up_distance_y(y_pixel):
     pass #to do
 
-def calc_angle_of(x_pixel):
-    return (x_pixel - HORIZONTAL_PIXEL_WIDTH_CENTER) * DEGREES_PER_PIXEL
+def look_up_distance_x(x_width):
+    pass #to do
+
+def calc_horizontal_angle_of(x_pixel):
+    return (x_pixel - HORIZONTAL_PIXEL_CENTER) * HORIZONTAL_DEGREES_PER_PIXEL
+
+def calc_vertical_angle_of(y_pixel):
+    return (y_pixel - VERTICAL_PIXEL_CENTER) * VERTICAL_DEGREES_PER_PIXEL
 
 def output_data(d,a_of):
     pass #to do
@@ -50,10 +49,11 @@ def find_min_x(contours):
     for c in range(len(contours)):
         for p in range(len(contours[c])):
             for x,y in (contours[c][p]):
-                if (x < min_x):
-                    min_x = x
-                    min_x_index = p
-                    c_index = c
+                if (x != 0xEFFF):
+                    if (x < min_x):
+                        min_x = x
+                        min_x_index = p
+                        c_index = c
 
     return c_index, min_x_index
 
@@ -65,10 +65,11 @@ def find_max_x(contours):
     for c in range(len(contours)):
         for p in range(len(contours[c])):
             for x,y in (contours[c][p]):
-                if ( x > max_x):
-                    max_x = x
-                    max_x_index = p
-                    c_index = c
+                if (x != 0xEFFF):
+                    if ( x > max_x):
+                        max_x = x
+                        max_x_index = p
+                        c_index = c
 
     return c_index, max_x_index
 
@@ -80,10 +81,11 @@ def find_min_y(contours):
     for c in range(len(contours)):
         for p in range(len(contours[c])):
             for x,y in (contours[c][p]):
-                if ( y < min_y):
-                    min_y = y
-                    min_y_index = p
-                    c_index = c
+                if (y != 0xEFFF):
+                    if ( y < min_y):
+                        min_y = y
+                        min_y_index = p
+                        c_index = c
 
     return c_index, min_y_index
 
@@ -230,13 +232,6 @@ cv2.createTrackbar("H2","app config",0,180,callback)
 cv2.createTrackbar("S2","app config",0,255,callback)
 cv2.createTrackbar("V2","app config",0,255,callback)
 cv2.createTrackbar("min cargo area","app config",0,500,callback)
-cv2.namedWindow("camera config")
-cv2.resizeWindow("camera config",600,800)
-cv2.createTrackbar("brightness","camera config",0,100,brightness_callback)
-cv2.createTrackbar("saturation","camera config",-100,100,saturation_callback)
-cv2.createTrackbar("exposure","camera config",-25,25,exposure_callback)
-cv2.createTrackbar("contrast","camera config",-100,100,contrast_callback)
-cv2.createTrackbar("sharpness","camera config",-100,100,sharpness_callback)
 
 read_params_file(PARAMETERS_FILENAME)
 
@@ -275,18 +270,31 @@ while True:
     contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     #cv2.drawContours(image, contours, -1, (0,255,0), 3)
 
-    l = len(contours)
-    if (l == 5 or l == 4):
+    l = len(contours)    
+    if (l == 5):
 
-        # find tapes of interest
+        # because they are often not fully visible at the far left and far right, drop far left and far right
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
         c_min_y, p_min_y = find_min_y(contours)
-    
-        cam_distance = look_up_distance(contours[c_min_y][p_min_y][0][1]) # y coordinate of min y-pixel value
-        cam_angle_of = calc_angle_of(contours[c_min_y][p_min_y][0][0]) # x coordinate of min y-pixel value
+        contours[c_min_x][p_min_x][0][0] = 0xEFFF
+        contours[c_min_x][p_min_x][0][1] = 0xEFFF
+        contours[c_max_x][p_max_x][0][0] = 0xEFFF
+        contours[c_max_x][p_max_x][0][1] = 0xEFFF
 
-        output_data(cam_distance,cam_angle_of)
+        # with the original far left and far right removed, find the far left and far right
+        c_min_x, p_min_x = find_min_x(contours)
+        c_max_x, p_max_x = find_max_x(contours)
+
+        min_x_x = contours[c_min_x][p_min_x][0][0]
+        max_x_x = contours[c_max_x][p_max_x][0][0]
+
+        cam_distance = look_up_distance_y(contours[c_min_y][p_min_y][0][1]) # y coordinate of min y-pixel value (if camera is in fixed position)
+        #cam_distance = look_up_distance_x(max_x_x - min_x_x) # x-pixel width (if camera is on shooter)
+        cam_angle_of_horizontal = calc_horizontal_angle_of(contours[c_min_y][p_min_y][0][0]) # x coordinate of min y-pixel value
+        cam_angle_of_vertical = calc_vertical_angle_of(contours[c_min_y][p_min_y][0][1])
+
+        output_data(cam_distance,cam_angle_of_horizontal)
 
         # draw hub target
         x_min_x = contours[c_min_x][p_min_x][0][0]
@@ -301,6 +309,60 @@ while True:
         pts = np.array([[x_min_x,y_min_x],[x_min_y,y_min_y],[x_max_x,y_max_y]], np.int32)
         image = cv2.polylines(image, [pts], True, (0,0,255), 3)
         #cv2.circle(image, (x_min_y,y_min_y), 20, (0,0,255), 3)
+
+    elif (l == 4):
+
+        # start with the far left and far right
+        c_min_x, p_min_x = find_min_x(contours)
+        c_max_x, p_max_x = find_max_x(contours)
+        first_min_x_x = contours[c_min_x][p_min_x][0][0]
+        first_min_x_y = contours[c_min_x][p_min_x][0][1]
+        first_max_x_x = contours[c_max_x][p_max_x][0][0]
+        first_max_x_y= contours[c_max_x][p_max_x][0][1]
+
+        # drop the far left and far right
+        contours[c_min_x][p_min_x][0][0] = 0xEFFF
+        contours[c_min_x][p_min_x][0][1] = 0xEFFF
+        contours[c_max_x][p_max_x][0][0] = 0xEFFF
+        contours[c_max_x][p_max_x][0][1] = 0xEFFF
+
+        # get new far left and far right, which are the 2 remaining
+        c_min_x, p_min_x = find_min_x(contours)
+        c_max_x, p_max_x = find_max_x(contours)
+
+        # find max x of left and min x of right
+        c_max_x_left, p_max_x_left = find_max_x(contours[c_min_x][p_min_x])
+        c_min_x_right, p_min_x_right = find_min_x(contours[c_max_x][p_max_x])
+
+        # find min y of left and min y of right
+        c_min_y_left, p_min_y_left = find_min_y(contours[c_min_x][p_min_x])
+        c_min_y_right, p_min_y_right = find_min_y(contours[c_max_x][p_max_x])
+
+        # find mid point of x
+        x_right = contours[c_min_x_right][p_min_x_right][0][0]
+        x_left = contours[c_max_x_left][p_max_x_left][0][0]
+        x = x_right - (x_right - x_left) / 2 
+
+        # find mid point of y
+        y_right = contours[c_min_y_right][p_min_y_right][0][1]
+        y_left = contours[c_min_y_left][p_min_y_left][0][1]
+        y_diff = abs(y_right - y_left) / 2
+        if y_right < y_left:
+            y = y_right + 10
+        elif y_right > y_left:
+            y = y_left + 10
+         
+        cam_distance = look_up_distance_y(y) # if camera is in fixed position
+        #min_x_x = contours[c_min_x_full_width][p_min_x_full_width][0][0]
+        #max_x_x = contours[c_max_x_full_width][p_max_x_full_width][0][0]
+        #cam_distance = look_up_distance_x(max_x_x - min_x_x) # if camera is on shooter
+        cam_angle_of_horizontal = calc_horizontal_angle_of(x) # from new center
+        cam_angle_of_vertical = calc_vertical_angle_of(y) # from new center
+        
+        output_data(cam_distance,cam_angle_of_horizontal)
+
+        pts = np.array([[first_min_x_x,first_min_x_y],[x,y],[first_max_x_x,first_max_x_y]], np.int32)
+        image = cv2.polylines(image, [pts], True, (0,0,255), 3)
 
     # update all the images
     cv2.imshow("RPiVideo",image)
