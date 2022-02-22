@@ -1,6 +1,7 @@
 #!/usr/bin/python3.9
 from calendar import c
 from tkinter import Y
+from typing import Counter
 import cv2
 from picamera.array import PiRGBArray
 from picamera import PiCamera
@@ -9,6 +10,7 @@ import time
 import numpy as np
 import PySimpleGUI as sg
 import configparser
+from networktables import NetworkTables
 
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
 PARAMETERS_FILENAME = "kind of working params(cloudy)"
@@ -25,6 +27,7 @@ HORIZONTAL_PIXEL_CENTER = (PIXEL_WIDTH / 2) - 0.5
 VERTICAL_PIXEL_CENTER = (PIXEL_HEIGHT / 2) - 0.5 
 HORIZONTAL_DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
 VERTICAL_DEGREES_PER_PIXEL = VERTICAL_FOV / PIXEL_HEIGHT
+RIO_IP = "10.9.10.2"
 
 def look_up_distance_y(y_pixel):
     pass #to do
@@ -235,13 +238,20 @@ cv2.createTrackbar("min cargo area","app config",0,500,callback)
 
 read_params_file(PARAMETERS_FILENAME)
 
+NetworkTables.initialize(RIO_IP)
+nt = NetworkTables.getTable("pi")
+
 vs = PiVideoStream().start() # create camera object and start reading images
 print ("starting stream")
 time.sleep(3) # camera sensor settling time
 
 callback_set = False
 
+loops = 0
+
 while True:
+
+    start_time = time.process_time()
 
     image = None
     mask = None
@@ -270,9 +280,9 @@ while True:
     contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     #cv2.drawContours(image, contours, -1, (0,255,0), 3)
 
-    l = len(contours)    
+    l = len(contours)
     if (l == 5):
-
+        print (l)
         # because they are often not fully visible at the far left and far right, drop far left and far right
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
@@ -289,10 +299,15 @@ while True:
         min_x_x = contours[c_min_x][p_min_x][0][0]
         max_x_x = contours[c_max_x][p_max_x][0][0]
 
-        cam_distance = look_up_distance_y(contours[c_min_y][p_min_y][0][1]) # y coordinate of min y-pixel value (if camera is in fixed position)
+        #Hub center = center of bounding rectangle of min y contours
+        x,y,w,h = cv2.boundingRect(contours[c_min_y][p_min_y])
+        hub_x = x + (w/2)
+        hub_y = y + (h/2)
+
+        cam_distance = look_up_distance_y(hub_y) # (if camera is in fixed position)
         #cam_distance = look_up_distance_x(max_x_x - min_x_x) # x-pixel width (if camera is on shooter)
-        cam_angle_of_horizontal = calc_horizontal_angle_of(contours[c_min_y][p_min_y][0][0]) # x coordinate of min y-pixel value
-        cam_angle_of_vertical = calc_vertical_angle_of(contours[c_min_y][p_min_y][0][1])
+        cam_angle_of_horizontal = calc_horizontal_angle_of(hub_x) # x coordinate of min y-pixel value
+        cam_angle_of_vertical = calc_vertical_angle_of(hub_y)
 
         output_data(cam_distance,cam_angle_of_horizontal)
 
@@ -300,18 +315,16 @@ while True:
         x_min_x = contours[c_min_x][p_min_x][0][0]
         y_min_x = contours[c_min_x][p_min_x][0][1]
 
-        x_min_y = contours[c_min_y][p_min_y][0][0]
-        y_min_y = contours[c_min_y][p_min_y][0][1]
-
         x_max_x = contours[c_max_x][p_max_x][0][0]
         y_max_y = contours[c_max_x][p_max_x][0][1]
 
-        pts = np.array([[x_min_x,y_min_x],[x_min_y,y_min_y],[x_max_x,y_max_y]], np.int32)
+        pts = np.array([[x_min_x,y_min_x],[hub_x,hub_y],[x_max_x,y_max_y]], np.int32)
         image = cv2.polylines(image, [pts], True, (0,0,255), 3)
         #cv2.circle(image, (x_min_y,y_min_y), 20, (0,0,255), 3)
 
     elif (l == 4):
 
+        print (l)
         # start with the far left and far right
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
@@ -320,6 +333,7 @@ while True:
         first_max_x_x = contours[c_max_x][p_max_x][0][0]
         first_max_x_y= contours[c_max_x][p_max_x][0][1]
 
+        """
         # drop the far left and far right
         contours[c_min_x][p_min_x][0][0] = 0xEFFF
         contours[c_min_x][p_min_x][0][1] = 0xEFFF
@@ -351,18 +365,32 @@ while True:
             y = y_right + 10
         elif y_right > y_left:
             y = y_left + 10
-         
-        cam_distance = look_up_distance_y(y) # if camera is in fixed position
+        """
+       
+        c_min_y, p_min_y = find_min_y(contours)
+        x,y,w,h = cv2.boundingRect(contours[c_min_y][p_min_y])
+
+        hub_x = x
+        hub_y = y
+
+        cam_distance = look_up_distance_y(hub_y) # if camera is in fixed position
         #min_x_x = contours[c_min_x_full_width][p_min_x_full_width][0][0]
         #max_x_x = contours[c_max_x_full_width][p_max_x_full_width][0][0]
         #cam_distance = look_up_distance_x(max_x_x - min_x_x) # if camera is on shooter
-        cam_angle_of_horizontal = calc_horizontal_angle_of(x) # from new center
-        cam_angle_of_vertical = calc_vertical_angle_of(y) # from new center
-        
-        output_data(cam_distance,cam_angle_of_horizontal)
+        cam_angle_of_horizontal = calc_horizontal_angle_of(hub_x) # from new center
+        cam_angle_of_vertical = calc_vertical_angle_of(hub_y) # from new center
 
-        pts = np.array([[first_min_x_x,first_min_x_y],[x,y],[first_max_x_x,first_max_x_y]], np.int32)
+        pts = np.array([[first_min_x_x,first_min_x_y],[hub_x,hub_y],[first_max_x_x,first_max_x_y]], np.int32)
         image = cv2.polylines(image, [pts], True, (0,0,255), 3)
+
+        # loop time
+        current_time = time.process_time()
+        calc_time = current_time - start_time
+        loops = loops + 1
+
+        # data format for network table key "Target" : "id,current time,calcuated time,distance,angle of,color"
+        hub_data = "{},{},{},{},{},{}".format(loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,0)
+        nt.putString(hub_data)
 
     # update all the images
     cv2.imshow("RPiVideo",image)
