@@ -90,6 +90,23 @@ def find_min_y(contours):
 
     return c_index, min_y_index
 
+def find_max_y(contours):
+    max_y = -1
+    max_y_index = -1
+    c_index = -1
+
+    for c in range(len(contours)):
+        for p in range(len(contours[c])):
+            for x,y in (contours[c][p]):
+                if (y != 0xEFFF):
+                    if ( y > max_y):
+                        max_y = y
+                        max_y_index = p
+                        c_index = c
+
+    return c_index, max_y_index
+
+
 def callback(pos):
     pass
 
@@ -337,7 +354,6 @@ while True:
         # draw hub target
         x_min_x = contours[c_min_x][p_min_x][0][0]
         y_min_x = contours[c_min_x][p_min_x][0][1]
-
         x_max_x = contours[c_max_x][p_max_x][0][0]
         y_max_y = contours[c_max_x][p_max_x][0][1]
 
@@ -346,57 +362,26 @@ while True:
 
     elif (l == 4):
 
-        # start with the far left and far right
+        # find tape that is farthest down (this could be on far left or on far right)
+        c_max_y, p_max_y = find_max_y(contours)
+
+        # remove the farthest down contour 
+        contours[c_max_y][p_max_y][0][0] = 0xEFFF
+        contours[c_max_y][p_max_y][0][1] = 0xEFFF
+
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
-        first_min_x_x = contours[c_min_x][p_min_x][0][0]
-        first_min_x_y = contours[c_min_x][p_min_x][0][1]
-        first_max_x_x = contours[c_max_x][p_max_x][0][0]
-        first_max_x_y= contours[c_max_x][p_max_x][0][1]
-
-        """
-        # drop the far left and far right
-        contours[c_min_x][p_min_x][0][0] = 0xEFFF
-        contours[c_min_x][p_min_x][0][1] = 0xEFFF
-        contours[c_max_x][p_max_x][0][0] = 0xEFFF
-        contours[c_max_x][p_max_x][0][1] = 0xEFFF
-
-        # get new far left and far right, which are the 2 remaining
-        c_min_x, p_min_x = find_min_x(contours)
-        c_max_x, p_max_x = find_max_x(contours)
-
-        # find max x of left and min x of right
-        c_max_x_left, p_max_x_left = find_max_x(contours[c_min_x][p_min_x])
-        c_min_x_right, p_min_x_right = find_min_x(contours[c_max_x][p_max_x])
-
-        # find min y of left and min y of right
-        c_min_y_left, p_min_y_left = find_min_y(contours[c_min_x][p_min_x])
-        c_min_y_right, p_min_y_right = find_min_y(contours[c_max_x][p_max_x])
-
-        # find mid point of x
-        x_right = contours[c_min_x_right][p_min_x_right][0][0]
-        x_left = contours[c_max_x_left][p_max_x_left][0][0]
-        x = x_right - (x_right - x_left) / 2 
-
-        # find mid point of y
-        y_right = contours[c_min_y_right][p_min_y_right][0][1]
-        y_left = contours[c_min_y_left][p_min_y_left][0][1]
-        y_diff = abs(y_right - y_left) / 2
-        if y_right < y_left:
-            y = y_right + 10
-        elif y_right > y_left:
-            y = y_left + 10
-        """
-       
         c_min_y, p_min_y = find_min_y(contours)
+
+        # find center of middle contour
         x,y,w,h = cv2.boundingRect(contours[c_min_y][p_min_y])
 
         hub_x = round(x + w/2)
         hub_y = round(y + h/2)
 
         cam_distance = look_up_distance_y(hub_y) # if camera is in fixed position
-        #min_x_x = contours[c_min_x_full_width][p_min_x_full_width][0][0]
-        #max_x_x = contours[c_max_x_full_width][p_max_x_full_width][0][0]
+        #min_x_x = contours[c_min_x][p_min_x][0][0]
+        #max_x_x = contours[c_max_x][p_max_x][0][0]
         #cam_distance = look_up_distance_x(max_x_x - min_x_x) # if camera is on shooter
         cam_angle_of_horizontal = calc_horizontal_angle_of(hub_x) # from new center
         cam_angle_of_vertical = calc_vertical_angle_of(hub_y) # from new center
@@ -408,7 +393,13 @@ while True:
 
         output_data(loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,0)
 
-        pts = np.array([[first_min_x_x,first_min_x_y],[hub_x,hub_y],[first_max_x_x,first_max_x_y]], np.int32)
+        # draw hub target
+        min_x_x = contours[c_min_x][p_min_x][0][0]
+        min_x_y = contours[c_min_x][p_min_x][0][1]
+        max_x_x = contours[c_max_x][p_max_x][0][0]
+        max_x_y = contours[c_max_x][p_max_x][0][1]
+
+        pts = np.array([[min_x_x,min_x_y],[hub_x,hub_y],[max_x_x,max_x_y]], np.int32)
         image = draw_target(image, pts)
 
     # update all the images
