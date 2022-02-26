@@ -1,5 +1,6 @@
 #!/usr/bin/python3.9
 from calendar import c
+from sre_parse import FLAGS
 from tkinter import Y
 from typing import Counter
 import cv2
@@ -42,6 +43,7 @@ def calc_horizontal_angle_of(x_pixel):
 def calc_vertical_angle_of(y_pixel):
     return (y_pixel - VERTICAL_PIXEL_CENTER) * VERTICAL_DEGREES_PER_PIXEL
 
+
 def find_min_x(contours):
     min_x = 999
     min_x_index = -1
@@ -50,11 +52,10 @@ def find_min_x(contours):
     for c in range(len(contours)):
         for p in range(len(contours[c])):
             for x,y in (contours[c][p]):
-                if (x != 0xEFFF):
-                    if (x < min_x):
-                        min_x = x
-                        min_x_index = p
-                        c_index = c
+                if (x < min_x):
+                    min_x = x
+                    min_x_index = p
+                    c_index = c
 
     return c_index, min_x_index
 
@@ -66,11 +67,10 @@ def find_max_x(contours):
     for c in range(len(contours)):
         for p in range(len(contours[c])):
             for x,y in (contours[c][p]):
-                if (x != 0xEFFF):
-                    if ( x > max_x):
-                        max_x = x
-                        max_x_index = p
-                        c_index = c
+                if ( x > max_x):
+                    max_x = x
+                    max_x_index = p
+                    c_index = c
 
     return c_index, max_x_index
 
@@ -179,8 +179,8 @@ def output_data(loops,current_time,calc_time,cam_distance,cam_angle_of_horizonta
     hub_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,color)
     nt.putString("Target",hub_data)
 
-    if debug_mode == True:
-        print( hub_data)
+    #if debug_mode == True:
+    #    print( hub_data)
 
 def draw_target(image,pts):
 
@@ -286,6 +286,7 @@ callback_set = False
 
 loops = 0
 
+
 while True:
 
     start_time = time.process_time()
@@ -318,22 +319,22 @@ while True:
     #cv2.drawContours(image, contours, -1, (0,255,0), 3)
 
     l = len(contours)
+    #print(l)
     if (l == 5):
         # because they are often not fully visible at the far left and far right, drop far left and far right
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
-        c_min_y, p_min_y = find_min_y(contours)
-        contours[c_min_x][p_min_x][0][0] = 0xEFFF
-        contours[c_min_x][p_min_x][0][1] = 0xEFFF
-        contours[c_max_x][p_max_x][0][0] = 0xEFFF
-        contours[c_max_x][p_max_x][0][1] = 0xEFFF
+        contours.pop(c_min_x)
+        contours.pop(c_max_x)
 
         # with the original far left and far right removed, find the far left and far right
+       
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
 
         min_x_x = contours[c_min_x][p_min_x][0][0]
         max_x_x = contours[c_max_x][p_max_x][0][0]
+        c_min_y, p_min_y = find_min_y(contours)
 
         #Hub center = center of bounding rectangle of min y contours
         x,y,w,h = cv2.boundingRect(contours[c_min_y][p_min_y])
