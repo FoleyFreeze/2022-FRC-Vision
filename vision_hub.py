@@ -14,6 +14,7 @@ import configparser
 from networktables import NetworkTables
 import sys
 
+DEBUG_MODE = False
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
 PARAMETERS_FILENAME = "kind of working params(cloudy)"
 LOAD_FILE = True
@@ -30,6 +31,7 @@ VERTICAL_PIXEL_CENTER = (PIXEL_HEIGHT / 2) - 0.5
 HORIZONTAL_DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
 VERTICAL_DEGREES_PER_PIXEL = VERTICAL_FOV / PIXEL_HEIGHT
 RIO_IP = "10.9.10.2"
+REMOVE_ENDS_FROM_5 = False
 
 def look_up_distance_y(y_pixel):
     return(0)
@@ -82,11 +84,10 @@ def find_min_y(contours):
     for c in range(len(contours)):
         for p in range(len(contours[c])):
             for x,y in (contours[c][p]):
-                if (y != 0xEFFF):
-                    if ( y < min_y):
-                        min_y = y
-                        min_y_index = p
-                        c_index = c
+                if ( y < min_y):
+                    min_y = y
+                    min_y_index = p
+                    c_index = c
 
     return c_index, min_y_index
 
@@ -98,18 +99,15 @@ def find_max_y(contours):
     for c in range(len(contours)):
         for p in range(len(contours[c])):
             for x,y in (contours[c][p]):
-                if (y != 0xEFFF):
-                    if ( y > max_y):
-                        max_y = y
-                        max_y_index = p
-                        c_index = c
+                if ( y > max_y):
+                    max_y = y
+                    max_y_index = p
+                    c_index = c
 
     return c_index, max_y_index
 
-
 def callback(pos):
     pass
-
 
 def read_color():
     # reading the current colour value ranges
@@ -179,12 +177,12 @@ def output_data(loops,current_time,calc_time,cam_distance,cam_angle_of_horizonta
     hub_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,color)
     nt.putString("Target",hub_data)
 
-    #if debug_mode == True:
+    #if DEBUG_MODE == True:
     #    print( hub_data)
 
 def draw_target(image,pts):
 
-    if debug_mode == True:
+    if DEBUG_MODE == True:
         image = cv2.polylines(image, [pts], True, (0,0,255), 3)
 
     return(image)
@@ -255,12 +253,11 @@ def show_x_and_y(event, x, y, flags, userdata):
 
 # START
 
-debug_mode = False
 # determine debug mode depending on how the program was run
 if len(sys.argv) == 2 and sys.argv[1] == "debug":
-    debug_mode = True
+    DEBUG_MODE = True
 else:
-    debug_mode = False
+    DEBUG_MODE = False
 
 # create window with trackbars to control the color range
 cv2.namedWindow("app config")
@@ -320,31 +317,47 @@ while True:
 
     l = len(contours)
     #print(l)
-    if (l == 5):
-        # because they are often not fully visible at the far left and far right, drop far left and far right
-        c_min_x, p_min_x = find_min_x(contours)
-        c_max_x, p_max_x = find_max_x(contours)
-        contours.pop(c_min_x)
-        contours.pop(c_max_x)
+    if (l == 4 or l == 5):
 
-        # with the original far left and far right removed, find the far left and far right
+        if (l == 5):
+
+            if (REMOVE_ENDS_FROM_5 == True):
+                # because they are often not fully visible at the far left and far right, remove far left and far right
+                # find them first
+                c_min_x, p_min_x = find_min_x(contours)
+                c_max_x, p_max_x = find_max_x(contours)
        
+                # then remove them
+                contours.pop(c_min_x)
+                contours.pop(c_max_x)
+       
+        elif (l == 4):
+   
+            # find farthest down (this should be on far left or on far right)
+            c_max_y, p_max_y = find_max_y(contours)
+
+            # remove the farthest down contour
+            contours.pop(c_max_y)
+            
+        # find farthest left and right
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
 
-        min_x_x = contours[c_min_x][p_min_x][0][0]
-        max_x_x = contours[c_max_x][p_max_x][0][0]
+        # find top most
         c_min_y, p_min_y = find_min_y(contours)
-
-        #Hub center = center of bounding rectangle of min y contours
+        #Hub center = center of bounding rectangle of top most
         x,y,w,h = cv2.boundingRect(contours[c_min_y][p_min_y])
         hub_x = round(x + (w/2))
         hub_y = round(y + (h/2))
-
+    
+        # these are for distance if distance is done by x (width), and also used for drawing target on image
+        min_x_x = contours[c_min_x][p_min_x][0][0]
+        max_x_x = contours[c_max_x][p_max_x][0][0]
+        
         cam_distance = look_up_distance_y(hub_y) # (if camera is in fixed position)
         #cam_distance = look_up_distance_x(max_x_x - min_x_x) # x-pixel width (if camera is on shooter)
-        cam_angle_of_horizontal = calc_horizontal_angle_of(hub_x) # x coordinate of min y-pixel value
-        cam_angle_of_vertical = calc_vertical_angle_of(hub_y)
+        cam_angle_of_horizontal = calc_horizontal_angle_of(hub_x) # x coordinate of top most
+        cam_angle_of_vertical = calc_vertical_angle_of(hub_y) # y coordinate of top most
 
         # loop time
         current_time = time.process_time()
@@ -352,56 +365,12 @@ while True:
         loops = loops + 1
         output_data(loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,0)
 
-        # draw hub target
-        x_min_x = contours[c_min_x][p_min_x][0][0]
-        y_min_x = contours[c_min_x][p_min_x][0][1]
-        x_max_x = contours[c_max_x][p_max_x][0][0]
-        y_max_y = contours[c_max_x][p_max_x][0][1]
-
-        pts = np.array([[x_min_x,y_min_x],[hub_x,hub_y],[x_max_x,y_max_y]], np.int32)
-        image = draw_target(image,pts)
-
-    elif (l == 4):
-
-        # find tape that is farthest down (this could be on far left or on far right)
-        c_max_y, p_max_y = find_max_y(contours)
-
-        # remove the farthest down contour 
-        contours[c_max_y][p_max_y][0][0] = 0xEFFF
-        contours[c_max_y][p_max_y][0][1] = 0xEFFF
-
-        c_min_x, p_min_x = find_min_x(contours)
-        c_max_x, p_max_x = find_max_x(contours)
-        c_min_y, p_min_y = find_min_y(contours)
-
-        # find center of middle contour
-        x,y,w,h = cv2.boundingRect(contours[c_min_y][p_min_y])
-
-        hub_x = round(x + w/2)
-        hub_y = round(y + h/2)
-
-        cam_distance = look_up_distance_y(hub_y) # if camera is in fixed position
-        #min_x_x = contours[c_min_x][p_min_x][0][0]
-        #max_x_x = contours[c_max_x][p_max_x][0][0]
-        #cam_distance = look_up_distance_x(max_x_x - min_x_x) # if camera is on shooter
-        cam_angle_of_horizontal = calc_horizontal_angle_of(hub_x) # from new center
-        cam_angle_of_vertical = calc_vertical_angle_of(hub_y) # from new center
-
-        # loop time
-        current_time = time.process_time()
-        calc_time = current_time - start_time
-        loops = loops + 1
-
-        output_data(loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,0)
-
-        # draw hub target
-        min_x_x = contours[c_min_x][p_min_x][0][0]
+        # get remaining points to draw hub target
         min_x_y = contours[c_min_x][p_min_x][0][1]
-        max_x_x = contours[c_max_x][p_max_x][0][0]
         max_x_y = contours[c_max_x][p_max_x][0][1]
-
+    
         pts = np.array([[min_x_x,min_x_y],[hub_x,hub_y],[max_x_x,max_x_y]], np.int32)
-        image = draw_target(image, pts)
+        image = draw_target(image,pts)
 
     # update all the images
     cv2.imshow("RPiVideo",image)
