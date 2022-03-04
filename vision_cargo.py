@@ -1,5 +1,6 @@
 #!/usr/bin/python3.9
 from audioop import reverse
+from distutils.debug import DEBUG
 from operator import itemgetter
 import cv2
 from picamera.array import PiRGBArray
@@ -11,7 +12,9 @@ import PySimpleGUI as sg
 import configparser
 import sys
 from enum import Enum
+from networktables import NetworkTables
 
+RIO_IP = "10.9.10.2"
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
 PARAMETERS_FILENAME = "default-params.ini"
 ASPECT_RATIO_OF_1_MIN = 0.9
@@ -19,10 +22,24 @@ ASPECT_RATIO_OF_1_MAX = 1.05
 EXTENT_MIN = 0.0
 EXTENT_MAX = 0.8
 CARGO_TO_OUTPUT_MAX = 3
+HORIZONTAL_FOV = 90
+GAMMA_MIN = 0.0
+GAMMA_MAX = 3.0
+# From refernce drawing:
+# https://www.uctronics.com/arducam-90-degree-wide-angle-1-2-3-m12-mount-with-lens-adapter-for-raspberry-pi-high-quality-camera.html
+# arctan (4.92/2) /3.28 = 36.86989765, for half the verical
+# then 2x for the full veritcal => 36.86989765 * 2 = 73.7397953 => 74 
+VERTICAL_FOV = 74
+PIXEL_WIDTH = 640
+PIXEL_HEIGHT = 480
+HORIZONTAL_PIXEL_CENTER = (PIXEL_WIDTH / 2) - 0.5
+VERTICAL_PIXEL_CENTER = (PIXEL_HEIGHT / 2) - 0.5 
+HORIZONTAL_DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
+VERTICAL_DEGREES_PER_PIXEL = VERTICAL_FOV / PIXEL_HEIGHT
 
 class CargoColor(Enum):
-    RED = 1
-    BLUE = 2
+    BLUE = 1
+    RED = 2
 
 def callback(pos):
     pass
@@ -47,6 +64,7 @@ def write_params_file(file):
     config['params_section']['aspect ratio min'] = str(cv2.getTrackbarPos("aspect ratio min","trackbars"))
     config['params_section']['aspect ratio max'] = str(cv2.getTrackbarPos("aspect ratio max","trackbars"))
     config['params_section']['extent max'] = str(cv2.getTrackbarPos("extent max","trackbars"))
+    config['params_section']['gamma'] = str(cv2.getTrackbarPos("gamma","trackbars"))
     with open(file, 'w') as configfile:
         config.write(configfile)
 
@@ -90,6 +108,7 @@ def set_trackbar_values(config):
     cv2.setTrackbarPos("aspect ratio min","trackbars",int(config['params_section']['aspect ratio min']))
     cv2.setTrackbarPos("aspect ratio max","trackbars",int(config['params_section']['aspect ratio max']))
     cv2.setTrackbarPos("extent max","trackbars",int(config['params_section']['extent max']))
+    cv2.setTrackbarPos("gamma","trackbars",int(config['params_section']['gamma']))
 
 def get_trackbar_values(config):
    
@@ -110,11 +129,12 @@ def get_trackbar_values(config):
     config['params_section']['aspect ratio min'] = cv2.setTrackbarPos("aspect ratio min","trackbars")
     config['params_section']['aspect ratio max'] = cv2.setTrackbarPos("aspect ratio max","trackbars")
     config['params_section']['extent max'] = cv2.setTrackbarPos("extent max","trackbars")
+    config['params_section']['gamma'] = cv2.setTrackbarPos("gamma","trackbars")
 
     return config
 
 class PiVideoStream: # from pyimagesearch
-    def __init__(self, resolution=(640, 480), framerate=40):
+    def __init__(self, resolution=(PIXEL_WIDTH, PIXEL_HEIGHT), framerate=40):
         # initialize the camera and stream
         self.camera = PiCamera()
         self.camera.resolution = resolution
@@ -200,18 +220,56 @@ def find_cargo(contours,params):
             if DEBUG_MODE == True:
                 print("aspect ratio=%f extent=%f" % (aspect_ratio,extent))
 
-            if ((aspect_ratio > int(params['params_section']['min aspect ratio'])/100 and aspect_ratio < int(params['params_section']['max aspect ratio'])/100 ) \
-            and (extent < int(params['params_section']['max extent'])/100) ):
+            if ((aspect_ratio > int(params['params_section']['aspect ratio min'])/100 and aspect_ratio < int(params['params_section']['aspect ratio max'])/100 ) \
+            and (extent < int(params['params_section']['extent max'])/100) ):
                 (x,y),radius = cv2.minEnclosingCircle(approx)
                 cargo.append((area,(x,y),radius))
 
     return cargo
 
-def output_data(blue_cargo,red_cargo,max_cargo):
-   
-    cargo_data = ""
+def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo):
 
-    return cargo_data
+    blue_cargo.sort(key=itemgetter(0),reverse = True)
+    
+    num_cargo = 0
+    if len(blue_cargo) > max_cargo:
+        num_cargo = max_cargo
+    else:
+        num_cargo = len(blue_cargo)
+
+    for i in range(num_cargo):
+        cam_distance = look_up_distance_y(blue_cargo[i][1][1])
+        cam_angle_of_horizontal = calc_horizontal_angle_of(blue_cargo[i][1][0])
+
+        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE)
+
+        nt.putString("Cargo",cargo_data)
+        if DEBUG_MODE == True:
+            print(cargo_data)
+       
+        loops = loops + 1
+
+    red_cargo.sort(key=itemgetter(0),reverse = True)
+    num_cargo = 0
+    if len(red_cargo) > max_cargo:
+        num_cargo = max_cargo
+    else:
+        num_cargo = len(red_cargo)
+
+    for i in range(num_cargo):
+        cam_distance = look_up_distance_y(red_cargo[i][1][1])
+        cam_angle_of_horizontal = calc_horizontal_angle_of(red_cargo[i][1][0])
+
+        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED)
+
+        nt.putString("Cargo",cargo_data)
+       
+        if DEBUG_MODE == True:
+            print(cargo_data)
+
+        loops = loops + 1
+
+    return loops
 
 def draw_cargo(blue_cargo, red_cargo, max_cargo, image):
 
@@ -247,6 +305,20 @@ def draw_cargo(blue_cargo, red_cargo, max_cargo, image):
 
     return(image) 
 
+def calc_horizontal_angle_of(x_pixel):
+    return (x_pixel - HORIZONTAL_PIXEL_CENTER) * HORIZONTAL_DEGREES_PER_PIXEL
+
+def look_up_distance_y(y_pixel):
+    return(0)
+
+def make_color_LUT(params):
+    inverse_gamma = 1/  int(params['params_section']['gamma'])/100
+    values = np.arrange(0,256,dtype = np.uint8)
+    for v in values:
+        values[v] = ((v / 255.0) ** inverse_gamma) * 255
+    return values
+
+loops = 0
 
 # START
 
@@ -255,6 +327,9 @@ if len(sys.argv) == 2 and sys.argv[1] == "debug":
     DEBUG_MODE = True
 else:
     DEBUG_MODE = False
+
+NetworkTables.initialize(RIO_IP)
+nt = NetworkTables.getTable("pi")
 
 parameters = read_params_file(PARAMETERS_FILENAME)
 
@@ -280,6 +355,7 @@ if DEBUG_MODE == True:
     cv2.createTrackbar("aspect ratio min","trackbars",ASPECT_RATIO_OF_1_MIN*100,ASPECT_RATIO_OF_1_MAX*100,callback)
     cv2.createTrackbar("aspect ratio max","trackbars",ASPECT_RATIO_OF_1_MIN*100,ASPECT_RATIO_OF_1_MAX*100,callback)
     cv2.createTrackbar("extent max","trackbars",EXTENT_MIN*100,EXTENT_MAX*100,callback)
+    cv2.createTrackbar("gamma","trackbars",GAMMA_MIN*100,GAMMA_MAX*100,callback)
 
     # and load the trackbars with the parameter values from the file
     set_trackbar_values(parameters)
@@ -287,20 +363,31 @@ if DEBUG_MODE == True:
 vs = PiVideoStream().start() # create camera object and start reading images
 print ("starting stream")
 time.sleep(3) # camera sensor settling time
-                      
-while True:
+
+values = []
+
+if DEBUG_MODE == False:
+    values = make_color_LUT(parameters)
     
+while True:
+
+    start_time = time.process_time()
+
     blue_cargo = []
     red_cargo = []
 
     if DEBUG_MODE == True:
         params = get_trackbar_values(parameters)
+        values = make_color_LUT(params)
     else:
         params = parameters
 
     # read an image from the camara
     image = vs.read()
-
+    
+    #color correction
+    image = cv2.LUT(image,values)
+    
     # convert the image HSV for colour checking
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
 
@@ -313,9 +400,12 @@ while True:
     contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     red_cargo = find_cargo(contours,params)
 
-    data = output_data(blue_cargo, red_cargo, CARGO_TO_OUTPUT_MAX)
+    current_time = time.process_time()
+    calc_time = current_time - start_time
+
+    loops = output_data(loops, current_time, calc_time, blue_cargo, red_cargo, CARGO_TO_OUTPUT_MAX)
     if DEBUG_MODE == True:
-        print(data)
+       
         image = draw_cargo(blue_cargo, red_cargo, CARGO_TO_OUTPUT_MAX, image)
 
         # update all the images
