@@ -16,15 +16,17 @@ from networktables import NetworkTables
 
 RIO_IP = "10.9.10.2"
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
-PARAMETERS_FILENAME = "default-params.ini"
-ASPECT_RATIO_OF_1_MIN = 0.9
-ASPECT_RATIO_OF_1_MAX = 1.05
-EXTENT_MIN = 0.0
-EXTENT_MAX = 0.8
+PARAMETERS_FILENAME = "cargo_decent_red_params_no_blue_params_no_extra_lights_gamma_enabled"
+ASPECT_RATIO_OF_1_MIN = 95
+ASPECT_RATIO_OF_1_MAX = 100
+EXTENT_MIN = 70
+EXTENT_MAX = 85
 CARGO_TO_OUTPUT_MAX = 3
 HORIZONTAL_FOV = 90
-GAMMA_MIN = 0.0
-GAMMA_MAX = 3.0
+GAMMA_MIN = 30
+GAMMA_MAX = 200
+GAMMA_CURRENT = 100
+GAMMA_ENABLE = True
 # From refernce drawing:
 # https://www.uctronics.com/arducam-90-degree-wide-angle-1-2-3-m12-mount-with-lens-adapter-for-raspberry-pi-high-quality-camera.html
 # arctan (4.92/2) /3.28 = 36.86989765, for half the verical
@@ -112,24 +114,24 @@ def set_trackbar_values(config):
 
 def get_trackbar_values(config):
    
-    config['params_section']['blue H1'] = cv2.getTrackbarPos("blue H1","trackbars")
-    config['params_section']['blue S1'] = cv2.getTrackbarPos("blue S1","trackbars")
-    config['params_section']['blue V1'] = cv2.getTrackbarPos("blue V1","trackbars")
-    config['params_section']['blue H2'] = cv2.getTrackbarPos("blue H2","trackbars")
-    config['params_section']['blue S2'] = cv2.getTrackbarPos("blue S2","trackbars")
-    config['params_section']['blue V2'] = cv2.getTrackbarPos("blue V2","trackbars")
+    config['params_section']['blue H1'] = str(cv2.getTrackbarPos("blue H1","trackbars"))
+    config['params_section']['blue S1'] = str(cv2.getTrackbarPos("blue S1","trackbars"))
+    config['params_section']['blue V1'] = str(cv2.getTrackbarPos("blue V1","trackbars"))
+    config['params_section']['blue H2'] = str(cv2.getTrackbarPos("blue H2","trackbars"))
+    config['params_section']['blue S2'] = str(cv2.getTrackbarPos("blue S2","trackbars"))
+    config['params_section']['blue V2'] = str(cv2.getTrackbarPos("blue V2","trackbars"))
 
-    config['params_section']['red H1'] = cv2.getTrackbarPos("red H1","trackbars")
-    config['params_section']['red S1'] = cv2.getTrackbarPos("red S1","trackbars")
-    config['params_section']['red V1'] = cv2.getTrackbarPos("red V1","trackbars")
-    config['params_section']['red H2'] = cv2.getTrackbarPos("red H2","trackbars")
-    config['params_section']['red S2'] = cv2.getTrackbarPos("red S2","trackbars")
-    config['params_section']['red V2'] = cv2.getTrackbarPos("red V2","trackbars")
+    config['params_section']['red H1'] = str(cv2.getTrackbarPos("red H1","trackbars"))
+    config['params_section']['red S1'] = str(cv2.getTrackbarPos("red S1","trackbars"))
+    config['params_section']['red V1'] = str(cv2.getTrackbarPos("red V1","trackbars"))
+    config['params_section']['red H2'] = str(cv2.getTrackbarPos("red H2","trackbars"))
+    config['params_section']['red S2'] = str(cv2.getTrackbarPos("red S2","trackbars"))
+    config['params_section']['red V2'] = str(cv2.getTrackbarPos("red V2","trackbars"))
 
-    config['params_section']['aspect ratio min'] = cv2.setTrackbarPos("aspect ratio min","trackbars")
-    config['params_section']['aspect ratio max'] = cv2.setTrackbarPos("aspect ratio max","trackbars")
-    config['params_section']['extent max'] = cv2.setTrackbarPos("extent max","trackbars")
-    config['params_section']['gamma'] = cv2.setTrackbarPos("gamma","trackbars")
+    config['params_section']['aspect ratio min'] = str(cv2.getTrackbarPos("aspect ratio min","trackbars"))
+    config['params_section']['aspect ratio max'] = str(cv2.getTrackbarPos("aspect ratio max","trackbars"))
+    config['params_section']['extent max'] = str(cv2.getTrackbarPos("extent max","trackbars"))
+    config['params_section']['gamma'] = str(cv2.getTrackbarPos("gamma","trackbars"))
 
     return config
 
@@ -139,9 +141,9 @@ class PiVideoStream: # from pyimagesearch
         self.camera = PiCamera()
         self.camera.resolution = resolution
         self.camera.framerate = framerate
-        self.camera.brightness = 50
-        self.camera.contrast = 0
-        self.camera.exposure_mode = "snow"
+        #self.camera.brightness = 50
+        #self.camera.contrast = 0
+        #self.camera.exposure_mode = "snow"
         self.rawCapture = PiRGBArray(self.camera, size=resolution)
         self.stream = self.camera.capture_continuous(self.rawCapture,
             format="bgr", use_video_port=True)
@@ -193,6 +195,8 @@ def find_cargo(contours,params):
     
     cargo = []
 
+    print("len contours=%d" % (len(contours)))
+
     for c in contours:
 
         perim = cv2.arcLength(c,True)
@@ -201,27 +205,28 @@ def find_cargo(contours,params):
         approx = cv2.approxPolyDP(c, 0.03 * perim ,True)
         #area = cv2.contourArea(approx)
         #if ((len(approx) == 7 or len(approx) == 6) and area > min_cargo_area):
-        if (len(approx) == 7 or len(approx) == 6):
+        print("len approx=%d" % (len(approx)))
+        #if (len(approx) >= 7):
 
-            # aspect ratio should be around 1 for a circle
-            x,y,w,h = cv2.boundingRect(approx)
-            if (h > 0):
-                aspect_ratio = w / h
-            else:
-                aspect_ratio = 0
+        # aspect ratio should be around 1 for a circle
+        x,y,w,h = cv2.boundingRect(approx)
+        if (h > 0):
+            aspect_ratio = w / h
+        else:
+            aspect_ratio = 0
 
-            # the area of the circle contour should be some amount < area of the bounding rect of the circle contour
-            area = cv2.contourArea(approx)
-            if (w > 0):
-                extent = area / (w * h)
-            else:
-                extent = 0
+        # the area of the circle contour should be some amount < area of the bounding rect of the circle contour
+        area = cv2.contourArea(approx)
+        if (w > 0):
+            extent = area / (w * h)
+        else:
+            extent = 0
 
-            if DEBUG_MODE == True:
-                print("aspect ratio=%f extent=%f" % (aspect_ratio,extent))
+        if DEBUG_MODE == True:
+            print("ar=%f,ex=%f,area=%f" % (aspect_ratio,extent,area))
 
-            if ((aspect_ratio > int(params['params_section']['aspect ratio min'])/100 and aspect_ratio < int(params['params_section']['aspect ratio max'])/100 ) \
-            and (extent < int(params['params_section']['extent max'])/100) ):
+            if ((aspect_ratio >= ASPECT_RATIO_OF_1_MIN/100 and aspect_ratio <= ASPECT_RATIO_OF_1_MAX/100 ) \
+            and (extent >= EXTENT_MIN/100 and extent <= EXTENT_MAX/100) ):
                 (x,y),radius = cv2.minEnclosingCircle(approx)
                 cargo.append((area,(x,y),radius))
 
@@ -241,7 +246,7 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
         cam_distance = look_up_distance_y(blue_cargo[i][1][1])
         cam_angle_of_horizontal = calc_horizontal_angle_of(blue_cargo[i][1][0])
 
-        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE)
+        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE.value)
 
         nt.putString("Cargo",cargo_data)
         if DEBUG_MODE == True:
@@ -260,7 +265,7 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
         cam_distance = look_up_distance_y(red_cargo[i][1][1])
         cam_angle_of_horizontal = calc_horizontal_angle_of(red_cargo[i][1][0])
 
-        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED)
+        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED.value)
 
         nt.putString("Cargo",cargo_data)
        
@@ -312,8 +317,10 @@ def look_up_distance_y(y_pixel):
     return(0)
 
 def make_color_LUT(params):
-    inverse_gamma = 1/  int(params['params_section']['gamma'])/100
-    values = np.arrange(0,256,dtype = np.uint8)
+    #gamma = (int(params['params_section']['gamma']))
+    gamma_converted = GAMMA_CURRENT / 100
+    inverse_gamma = 1.0 / gamma_converted
+    values = np.arange(0,256,dtype = np.uint8)
     for v in values:
         values[v] = ((v / 255.0) ** inverse_gamma) * 255
     return values
@@ -352,10 +359,10 @@ if DEBUG_MODE == True:
     cv2.createTrackbar("blue H2","trackbars",0,180,callback)
     cv2.createTrackbar("blue S2","trackbars",0,255,callback)
     cv2.createTrackbar("blue V2","trackbars",0,255,callback)
-    cv2.createTrackbar("aspect ratio min","trackbars",ASPECT_RATIO_OF_1_MIN*100,ASPECT_RATIO_OF_1_MAX*100,callback)
-    cv2.createTrackbar("aspect ratio max","trackbars",ASPECT_RATIO_OF_1_MIN*100,ASPECT_RATIO_OF_1_MAX*100,callback)
-    cv2.createTrackbar("extent max","trackbars",EXTENT_MIN*100,EXTENT_MAX*100,callback)
-    cv2.createTrackbar("gamma","trackbars",GAMMA_MIN*100,GAMMA_MAX*100,callback)
+    cv2.createTrackbar("aspect ratio min","trackbars",ASPECT_RATIO_OF_1_MIN,ASPECT_RATIO_OF_1_MAX,callback)
+    cv2.createTrackbar("aspect ratio max","trackbars",ASPECT_RATIO_OF_1_MIN,ASPECT_RATIO_OF_1_MAX,callback)
+    cv2.createTrackbar("extent max","trackbars",EXTENT_MIN,EXTENT_MAX,callback)
+    cv2.createTrackbar("gamma","trackbars",GAMMA_MIN,GAMMA_MAX,callback)
 
     # and load the trackbars with the parameter values from the file
     set_trackbar_values(parameters)
@@ -366,7 +373,7 @@ time.sleep(3) # camera sensor settling time
 
 values = []
 
-if DEBUG_MODE == False:
+if DEBUG_MODE == False and GAMMA_ENABLE == True:
     values = make_color_LUT(parameters)
     
 while True:
@@ -378,23 +385,27 @@ while True:
 
     if DEBUG_MODE == True:
         params = get_trackbar_values(parameters)
-        values = make_color_LUT(params)
+        if GAMMA_ENABLE == True:
+            values = make_color_LUT(params)
     else:
         params = parameters
 
     # read an image from the camara
     image = vs.read()
     
-    #color correction
-    image = cv2.LUT(image,values)
+    if GAMMA_ENABLE == True:
+        #color correction
+        image = cv2.LUT(image,values)
     
     # convert the image HSV for colour checking
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
 
+    """
     mask = make_mask_image(CargoColor.BLUE,params,hsv)
     contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     #cv2.drawContours(image, contours, -1, (0,255,0), 3)
     blue_cargo = find_cargo(contours,params)
+    """
     
     mask = make_mask_image(CargoColor.RED,params,hsv)
     contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
