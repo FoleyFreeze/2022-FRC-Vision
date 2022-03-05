@@ -13,12 +13,13 @@ import configparser
 import sys
 from enum import Enum
 from networktables import NetworkTables
+import math
 
 RIO_IP = "10.9.10.2"
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
-PARAMETERS_FILENAME = "cargo_decent_red_params_no_blue_params_no_extra_lights_gamma_enabled"
-ASPECT_RATIO_OF_1_MIN = 95
-ASPECT_RATIO_OF_1_MAX = 100
+PARAMETERS_FILENAME = "temp"
+ASPECT_RATIO_OF_1_MIN = 90
+ASPECT_RATIO_OF_1_MAX = 105
 EXTENT_MIN = 70
 EXTENT_MAX = 85
 CARGO_TO_OUTPUT_MAX = 3
@@ -27,6 +28,7 @@ GAMMA_MIN = 30
 GAMMA_MAX = 200
 GAMMA_CURRENT = 100
 GAMMA_ENABLE = True
+CARGO_MAX = 22 # limit the total number of cargo recognized
 # From refernce drawing:
 # https://www.uctronics.com/arducam-90-degree-wide-angle-1-2-3-m12-mount-with-lens-adapter-for-raspberry-pi-high-quality-camera.html
 # arctan (4.92/2) /3.28 = 36.86989765, for half the verical
@@ -38,6 +40,7 @@ HORIZONTAL_PIXEL_CENTER = (PIXEL_WIDTH / 2) - 0.5
 VERTICAL_PIXEL_CENTER = (PIXEL_HEIGHT / 2) - 0.5 
 HORIZONTAL_DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
 VERTICAL_DEGREES_PER_PIXEL = VERTICAL_FOV / PIXEL_HEIGHT
+AREA_MIN = 200
 
 class CargoColor(Enum):
     BLUE = 1
@@ -195,40 +198,40 @@ def find_cargo(contours,params):
     
     cargo = []
 
-    print("len contours=%d" % (len(contours)))
+    #print("len contours=%d" % (len(contours)))
 
     for c in contours:
 
         perim = cv2.arcLength(c,True)
-        #a = np.linspace(0.001, 0.10, 50) # used to determine epsilon for approxPolyDP
-        # # for i in a: # used to determine epsilon for approxPolyDP
-        approx = cv2.approxPolyDP(c, 0.03 * perim ,True)
-        #area = cv2.contourArea(approx)
-        #if ((len(approx) == 7 or len(approx) == 6) and area > min_cargo_area):
-        print("len approx=%d" % (len(approx)))
-        #if (len(approx) >= 7):
-
-        # aspect ratio should be around 1 for a circle
-        x,y,w,h = cv2.boundingRect(approx)
-        if (h > 0):
-            aspect_ratio = w / h
-        else:
-            aspect_ratio = 0
-
-        # the area of the circle contour should be some amount < area of the bounding rect of the circle contour
+        approx = cv2.approxPolyDP(c, 0.02 * perim ,True)
         area = cv2.contourArea(approx)
-        if (w > 0):
-            extent = area / (w * h)
-        else:
-            extent = 0
 
-        if DEBUG_MODE == True:
-            print("ar=%f,ex=%f,area=%f" % (aspect_ratio,extent,area))
+        print("len approx=%d" % (len(approx)))
+        if (len(approx) >= 7 and len(approx) <= 9) and area > AREA_MIN:
 
-            if ((aspect_ratio >= ASPECT_RATIO_OF_1_MIN/100 and aspect_ratio <= ASPECT_RATIO_OF_1_MAX/100 ) \
-            and (extent >= EXTENT_MIN/100 and extent <= EXTENT_MAX/100) ):
+            # aspect ratio should be around 1 for a circle
+            x,y,w,h = cv2.boundingRect(approx)
+            if (h > 0):
+                aspect_ratio = w / h
+            else:
+                aspect_ratio = 0
+            
+            # the area of the circle contour should be some amount < area of the bounding rect of the circle contour
+            area = cv2.contourArea(approx)
+            """
+            if (w > 0):
+                extent = area / (w * h)
+            else:
+                extent = 0
+            """
+            
+            if DEBUG_MODE == True:
+                print("ar=%f,a=%f" % (aspect_ratio,area))
+
+            if ((aspect_ratio >= ASPECT_RATIO_OF_1_MIN/100 and aspect_ratio <= ASPECT_RATIO_OF_1_MAX/100 )):
                 (x,y),radius = cv2.minEnclosingCircle(approx)
                 cargo.append((area,(x,y),radius))
+            
 
     return cargo
 
@@ -253,8 +256,9 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
             print(cargo_data)
        
         loops = loops + 1
+    print("len(red_cargo)=%d" % (len(red_cargo)))
 
-    red_cargo.sort(key=itemgetter(0),reverse = True)
+    red_cargo.sort(key=itemgetter(0),reverse = True)    
     num_cargo = 0
     if len(red_cargo) > max_cargo:
         num_cargo = max_cargo
@@ -385,7 +389,7 @@ while True:
 
     if DEBUG_MODE == True:
         params = get_trackbar_values(parameters)
-        if GAMMA_ENABLE == True:
+        if GAMMA_ENABLE == True and GAMMA_CURRENT != 100:
             values = make_color_LUT(params)
     else:
         params = parameters
@@ -393,7 +397,7 @@ while True:
     # read an image from the camara
     image = vs.read()
     
-    if GAMMA_ENABLE == True:
+    if GAMMA_ENABLE == True and GAMMA_CURRENT != 100:
         #color correction
         image = cv2.LUT(image,values)
     
