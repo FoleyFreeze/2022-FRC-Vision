@@ -17,16 +17,16 @@ import math
 
 RIO_IP = "10.9.10.2"
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
-PARAMETERS_FILENAME = "temp"
+PARAMETERS_FILENAME = "cargo-red-build-room-gamma-150-v2"
 ASPECT_RATIO_OF_1_MIN = 90
-ASPECT_RATIO_OF_1_MAX = 105
+ASPECT_RATIO_OF_1_MAX = 140
 EXTENT_MIN = 70
 EXTENT_MAX = 85
 CARGO_TO_OUTPUT_MAX = 3
 HORIZONTAL_FOV = 90
 GAMMA_MIN = 30
 GAMMA_MAX = 200
-GAMMA_CURRENT = 100
+GAMMA_CURRENT = 150 # 100 is no correction; 0 < gamma < 100 => darker image; gamma > 100 => brighter image
 GAMMA_ENABLE = True
 CARGO_MAX = 22 # limit the total number of cargo recognized
 # From refernce drawing:
@@ -41,6 +41,10 @@ VERTICAL_PIXEL_CENTER = (PIXEL_HEIGHT / 2) - 0.5
 HORIZONTAL_DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH 
 VERTICAL_DEGREES_PER_PIXEL = VERTICAL_FOV / PIXEL_HEIGHT
 AREA_MIN = 200
+OUTPUT_MODE = False
+DEBUG_MODE = False
+ANGLE_INCREMENT = 12
+    
 
 class CargoColor(Enum):
     BLUE = 1
@@ -183,11 +187,15 @@ def make_mask_image(color_requested,params,hsv_image):
 
     # read current color ranges for the specified color and convert the ranges into arrays
     if color_requested == CargoColor.BLUE:
+
         color1 = np.array([int(params['params_section']['blue H1']),int(params['params_section']['blue S1']),int(params['params_section']['blue V1'])])
         color2 = np.array([int(params['params_section']['blue H2']),int(params['params_section']['blue S2']),int(params['params_section']['blue V2'])])
     elif color_requested == CargoColor.RED:
         color1 = np.array([int(params['params_section']['red H1']),int(params['params_section']['red S1']),int(params['params_section']['red V1'])])
         color2 = np.array([int(params['params_section']['red H2']),int(params['params_section']['red S2']),int(params['params_section']['red V2'])])
+    else:
+        #if something really wrong, kill program
+        sys.exit("make_mask_image: invalid color")
 
     # identify the color by checking each pixel, keeping those match the color range
     mask = cv2.inRange(hsv_image,color1,color2)
@@ -206,8 +214,9 @@ def find_cargo(contours,params):
         approx = cv2.approxPolyDP(c, 0.02 * perim ,True)
         area = cv2.contourArea(approx)
 
-        print("len approx=%d" % (len(approx)))
-        if (len(approx) >= 7 and len(approx) <= 9) and area > AREA_MIN:
+        #print("len approx=%d" % (len(approx)))
+        #if (len(approx) >= 7 and len(approx) <= 9) and area > AREA_MIN:
+        if (len(approx) >= 4) and area > AREA_MIN:
 
             # aspect ratio should be around 1 for a circle
             x,y,w,h = cv2.boundingRect(approx)
@@ -225,8 +234,8 @@ def find_cargo(contours,params):
                 extent = 0
             """
             
-            if DEBUG_MODE == True:
-                print("ar=%f,a=%f" % (aspect_ratio,area))
+            #if DEBUG_MODE == True:
+            #    print("ar=%f,a=%f" % (aspect_ratio,area))
 
             if ((aspect_ratio >= ASPECT_RATIO_OF_1_MIN/100 and aspect_ratio <= ASPECT_RATIO_OF_1_MAX/100 )):
                 (x,y),radius = cv2.minEnclosingCircle(approx)
@@ -247,6 +256,8 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
 
     for i in range(num_cargo):
         cam_distance = look_up_distance_y(blue_cargo[i][1][1])
+        print("by=%d" % (blue_cargo[i][1][1]))
+
         cam_angle_of_horizontal = calc_horizontal_angle_of(blue_cargo[i][1][0])
 
         cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE.value)
@@ -256,7 +267,7 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
             print(cargo_data)
        
         loops = loops + 1
-    print("len(red_cargo)=%d" % (len(red_cargo)))
+    #print("len(red_cargo)=%d" % (len(red_cargo)))
 
     red_cargo.sort(key=itemgetter(0),reverse = True)    
     num_cargo = 0
@@ -267,6 +278,7 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
 
     for i in range(num_cargo):
         cam_distance = look_up_distance_y(red_cargo[i][1][1])
+        print("ry=%d" % (red_cargo[i][1][1]))
         cam_angle_of_horizontal = calc_horizontal_angle_of(red_cargo[i][1][0])
 
         cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED.value)
@@ -329,15 +341,41 @@ def make_color_LUT(params):
         values[v] = ((v / 255.0) ** inverse_gamma) * 255
     return values
 
-loops = 0
+def find_point_on_bounding_circle(x,y,r,theta):
+    x_circle = r * math.cos(math.radians(theta))
+    y_circle = r * math.sin(math.radians(theta))
+    return x_circle, y_circle
+
+def make_list_of_circle_points(x,y,r):
+
+    points = []
+
+    for theta in 360:
+        x_point, y_point = find_point_on_bounding_circle(x,y,r,theta)
+        points.append((x_point,y_point))
+        theta = theta + 360 / ANGLE_INCREMENT
+    return points
+
+def find_contour_points_on_bounding_circle(x,y,r,contour):
+    
+    bounding_circle_points = make_list_of_circle_points(x,y,r)
 
 # START
 
+loops = 0
+
 # determine debug mode depending on how the program was run
-if len(sys.argv) == 2 and sys.argv[1] == "debug":
-    DEBUG_MODE = True
-else:
-    DEBUG_MODE = False
+if len(sys.argv) == 3:
+
+    if sys.argv[1] == "debug":
+        DEBUG_MODE = True
+    else:
+        DEBUG_MODE = False
+
+    if sys.argv[2] == "output":
+        OUTPUT_MODE = True
+    else:
+        OUTPUT_MODE = False
 
 NetworkTables.initialize(RIO_IP)
 nt = NetworkTables.getTable("pi")
@@ -382,7 +420,11 @@ if DEBUG_MODE == False and GAMMA_ENABLE == True:
     
 while True:
 
-    start_time = time.process_time()
+    # start with robot time then add processing time at the end
+    start_time_robot = nt.getNumber("RobotTime",0)
+    start_time_pi = time.process_time()
+
+    nt.putNumber("PiTime",start_time_pi)
 
     blue_cargo = []
     red_cargo = []
@@ -395,7 +437,9 @@ while True:
         params = parameters
 
     # read an image from the camara
-    image = vs.read()
+    # camera is mounted upside down, so the image needs to be flipped around the x-axis
+    flipped_image = vs.read()
+    image = cv2.flip(flipped_image,0)
     
     if GAMMA_ENABLE == True and GAMMA_CURRENT != 100:
         #color correction
@@ -404,21 +448,19 @@ while True:
     # convert the image HSV for colour checking
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
 
-    """
-    mask = make_mask_image(CargoColor.BLUE,params,hsv)
-    contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    mask_blue = make_mask_image(CargoColor.BLUE,params,hsv)
+    contours,_ = cv2.findContours(mask_blue,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     #cv2.drawContours(image, contours, -1, (0,255,0), 3)
     blue_cargo = find_cargo(contours,params)
-    """
     
-    mask = make_mask_image(CargoColor.RED,params,hsv)
-    contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    mask_red = make_mask_image(CargoColor.RED,params,hsv)
+    contours,_ = cv2.findContours(mask_red,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     red_cargo = find_cargo(contours,params)
 
-    current_time = time.process_time()
-    calc_time = current_time - start_time
+    end_time_pi = time.process_time()
+    calc_time = end_time_pi - start_time_pi
 
-    loops = output_data(loops, current_time, calc_time, blue_cargo, red_cargo, CARGO_TO_OUTPUT_MAX)
+    loops = output_data(loops, start_time_robot, calc_time, blue_cargo, red_cargo, CARGO_TO_OUTPUT_MAX)
     if DEBUG_MODE == True:
        
         image = draw_cargo(blue_cargo, red_cargo, CARGO_TO_OUTPUT_MAX, image)
@@ -426,7 +468,9 @@ while True:
         # update all the images
         cv2.imshow("RPiVideo",image)
         #cv2.imshow("HSV",hsv)
-        cv2.imshow("Mask",mask)
+        cv2.imshow("Mask Blue",mask_blue)
+        cv2.imshow("Mask Red",mask_red)
+
 
         if process_user_key() == True:
             break
