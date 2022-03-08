@@ -44,7 +44,8 @@ AREA_MIN = 200
 OUTPUT_MODE = False
 DEBUG_MODE = False
 ANGLE_INCREMENT = 12
-    
+X_PIXEL_ADJUSTMENT = 0
+Y_PIXEL_ADJUSTMENT = 0    
 
 class CargoColor(Enum):
     BLUE = 1
@@ -239,9 +240,10 @@ def find_cargo(contours,params):
 
             if ((aspect_ratio >= ASPECT_RATIO_OF_1_MIN/100 and aspect_ratio <= ASPECT_RATIO_OF_1_MAX/100 )):
                 (x,y),radius = cv2.minEnclosingCircle(approx)
-                cargo.append((area,(x,y),radius))
+                x_adjusted = x + X_PIXEL_ADJUSTMENT
+                y_adjusted = y + Y_PIXEL_ADJUSTMENT
+                cargo.append((area,(x_adjusted,y_adjusted),radius))
             
-
     return cargo
 
 def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo):
@@ -255,10 +257,10 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
         num_cargo = len(blue_cargo)
 
     for i in range(num_cargo):
-        cam_distance = look_up_distance_y(blue_cargo[i][1][1])
+        cam_distance = look_up_distance_y(blue_cargo[i][1][1]) # blue_cargo[i][1][1] is the y-pixel at this point in the list
         print("by=%d" % (blue_cargo[i][1][1]))
 
-        cam_angle_of_horizontal = calc_horizontal_angle_of(blue_cargo[i][1][0])
+        cam_angle_of_horizontal = calc_horizontal_angle_of(blue_cargo[i][1][0]) # blue_cargo[i][1][0] is the x-pixel at this point in the list
 
         cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE.value)
 
@@ -277,9 +279,9 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
         num_cargo = len(red_cargo)
 
     for i in range(num_cargo):
-        cam_distance = look_up_distance_y(red_cargo[i][1][1])
+        cam_distance = look_up_distance_y(red_cargo[i][1][1]) # red_cargo[i][1][1] is the y-pixel at this point in the list
         print("ry=%d" % (red_cargo[i][1][1]))
-        cam_angle_of_horizontal = calc_horizontal_angle_of(red_cargo[i][1][0])
+        cam_angle_of_horizontal = calc_horizontal_angle_of(red_cargo[i][1][0]) # red_cargo[i][1][0] is the x-pixel at this point in the list
 
         cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED.value)
 
@@ -330,7 +332,7 @@ def calc_horizontal_angle_of(x_pixel):
     return (x_pixel - HORIZONTAL_PIXEL_CENTER) * HORIZONTAL_DEGREES_PER_PIXEL
 
 def look_up_distance_y(y_pixel):
-    return(0)
+    return (regress(y_pixel))
 
 def make_color_LUT(params):
     #gamma = (int(params['params_section']['gamma']))
@@ -360,6 +362,40 @@ def find_contour_points_on_bounding_circle(x,y,r,contour):
     
     bounding_circle_points = make_list_of_circle_points(x,y,r)
 
+# y pixel and distance data that made cargo_terms and is used by regress
+#367,6
+#300,12
+#280,18
+#242,24
+#218,30
+#197,36
+#171,48
+#152,60
+#143,72
+#136,84
+#129,96
+#125,108
+#123,120
+#119,132
+#115,144
+
+cargo_terms = [
+     2.5348515514866349e+003,
+    -5.0944933066340255e+001,
+     4.1457301321061552e-001,
+    -1.6714838482358727e-003,
+     3.3161347183020954e-006,
+    -2.5843521779150704e-009
+]
+
+def regress(x):
+  t = 1
+  r = 0
+  for c in cargo_terms:
+    r += c * t
+    t *= x
+  return r
+
 # START
 
 loops = 0
@@ -378,6 +414,7 @@ if len(sys.argv) == 3:
         OUTPUT_MODE = False
 
 NetworkTables.initialize(RIO_IP)
+NetworkTables.setUpdateRate(0.010)
 nt = NetworkTables.getTable("pi")
 
 parameters = read_params_file(PARAMETERS_FILENAME)
