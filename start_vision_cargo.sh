@@ -1,7 +1,8 @@
 #!/bin/bash
 #
 cd /home/pi/2022-FRC-Vision
-python3 vision_cargo.py debug
+sleep 3
+python3 vision_cargo.py debug output
 echo "ending vision"
-sleep 2
+sleep 3
 exit
