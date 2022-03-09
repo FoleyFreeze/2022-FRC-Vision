@@ -32,6 +32,8 @@ HORIZONTAL_DEGREES_PER_PIXEL  = HORIZONTAL_FOV / PIXEL_WIDTH
 VERTICAL_DEGREES_PER_PIXEL = VERTICAL_FOV / PIXEL_HEIGHT
 RIO_IP = "10.9.10.2"
 REMOVE_ENDS_FROM_5 = False
+X_PIXEL_ADJUSTMENT = 0
+Y_PIXEL_ADJUSTMENT = 0
 
 def look_up_distance_y(y_pixel):
     return(0)
@@ -275,6 +277,7 @@ cv2.createTrackbar("min cargo area","app config",0,500,callback)
 read_params_file(PARAMETERS_FILENAME)
 
 NetworkTables.initialize(RIO_IP)
+NetworkTables.setUpdateRate(0.010)
 nt = NetworkTables.getTable("pi")
 
 vs = PiVideoStream().start() # create camera object and start reading images
@@ -288,13 +291,19 @@ loops = 0
 
 while True:
 
-    start_time = time.process_time()
+  # start with robot time then add processing time at the end
+    start_time_robot = nt.getNumber("RobotTime",0)
+    start_time_pi = time.process_time()
+    
+    nt.putNumber("PiTime",start_time_pi)
 
     image = None
     mask = None
 
     # read an image from the camara
-    image = vs.read()
+    # camera is mounted upside down, so the image needs to be flipped around the x-axis
+    flipped_image = vs.read()
+    image = cv2.flip(flipped_image,0)
 
     # convert the image HSV for colour checking
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
@@ -349,6 +358,8 @@ while True:
         c_min_y, p_min_y = find_min_y(contours)
         #Hub center = center of bounding rectangle of top most
         x,y,w,h = cv2.boundingRect(contours[c_min_y][p_min_y])
+        x = x + X_PIXEL_ADJUSTMENT
+        y = y + Y_PIXEL_ADJUSTMENT
         hub_x = round(x + (w/2))
         hub_y = round(y + (h/2))
     
@@ -362,10 +373,10 @@ while True:
         cam_angle_of_vertical = calc_vertical_angle_of(hub_y) # y coordinate of top most
 
         # loop time
-        current_time = time.process_time()
-        calc_time = current_time - start_time
+        end_time_pi = time.process_time()
+        calc_time = end_time_pi - start_time_pi
         loops = loops + 1
-        output_data(loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,0)
+        output_data(loops,start_time_robot,calc_time,cam_distance,cam_angle_of_horizontal,0)
 
         # get remaining points to draw hub target
         min_x_y = contours[c_min_x][p_min_x][0][1]
