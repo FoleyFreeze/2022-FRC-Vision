@@ -16,7 +16,7 @@ import sys
 
 DEBUG_MODE = False
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
-PARAMETERS_FILENAME = "kind of working params(cloudy)"
+PARAMETERS_FILENAME = "Latest working params"
 LOAD_FILE = True
 HORIZONTAL_FOV = 90
 # From refernce drawing:
@@ -177,19 +177,20 @@ def output_data(loops,current_time,calc_time,cam_distance,cam_angle_of_horizonta
     hub_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,color)
     nt.putString("Target",hub_data)
 
-    #if DEBUG_MODE == True:
-    #    print( hub_data)
+    if DEBUG_MODE == True:
+        print( hub_data)
 
-def draw_target(image,pts):
+def draw_target(img,points):
 
     if DEBUG_MODE == True:
-        image = cv2.polylines(image, [pts], True, (0,0,255), 3)
+        #print(pts)
+        img = cv2.polylines(img, [points], True, (0,0,255), 3)
 
-    return(image)
+    return(img)
 
 class PiVideoStream: # from pyimagesearch
     def __init__(self, resolution=(PIXEL_WIDTH, PIXEL_HEIGHT), framerate=40, brightness=54, \
-        contrast=100, sharpness=100, exposure_compensation=-12, saturation=100):
+        contrast=100, sharpness=100, exposure_compensation=-18, saturation=100):
         # initialize the camera and stream
         self.camera = PiCamera()
         self.camera.resolution = resolution
@@ -200,6 +201,7 @@ class PiVideoStream: # from pyimagesearch
         self.camera.exposure_compensation = exposure_compensation # Each increment represents 1/6th of a stop. -25 and 25 (0 is default)
         self.camera.saturation = saturation #-100 to 100 (0 is default)
         self.camera.awb_mode = 'cloudy'
+        #self.camera.exposure_mode = 'beach'
         self.rawCapture = PiRGBArray(self.camera, size=resolution)
         self.stream = self.camera.capture_continuous(self.rawCapture,
             format="bgr", use_video_port=True)
@@ -317,7 +319,7 @@ while True:
 
     l = len(contours)
     #print(l)
-    if (l == 4 or l == 5):
+    if (l == 3 or l == 4 or l == 5):
 
         if (l == 5):
 
@@ -338,7 +340,7 @@ while True:
 
             # remove the farthest down contour
             contours.pop(c_max_y)
-            
+
         # find farthest left and right
         c_min_x, p_min_x = find_min_x(contours)
         c_max_x, p_max_x = find_max_x(contours)
