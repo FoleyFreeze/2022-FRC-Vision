@@ -1,0 +1,9 @@
+[params_section]
+h1 = 55
+s1 = 50
+v1 = 20
+h2 = 80
+s2 = 255
+v2 = 255
+min cargo area = 500
+
