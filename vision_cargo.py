@@ -17,16 +17,16 @@ import math
 
 RIO_IP = "10.9.10.2"
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
-PARAMETERS_FILENAME = "cargo-red-build-room-gamma-150-v2"
+PARAMETERS_FILENAME = "cargo_fieldhouse_red_blue_gamma_200_lights"
 ASPECT_RATIO_OF_1_MIN = 90
 ASPECT_RATIO_OF_1_MAX = 140
 EXTENT_MIN = 70
 EXTENT_MAX = 85
-CARGO_TO_OUTPUT_MAX = 3
+CARGO_TO_OUTPUT_MAX = 1
 HORIZONTAL_FOV = 90
 GAMMA_MIN = 30
 GAMMA_MAX = 200
-GAMMA_CURRENT = 150 # 100 is no correction; 0 < gamma < 100 => darker image; gamma > 100 => brighter image
+GAMMA_CURRENT = 200 # 100 is no correction; 0 < gamma < 100 => darker image; gamma > 100 => brighter image
 GAMMA_ENABLE = True
 CARGO_MAX = 22 # limit the total number of cargo recognized
 # From refernce drawing:
@@ -217,7 +217,7 @@ def find_cargo(contours,params):
 
         #print("len approx=%d" % (len(approx)))
         #if (len(approx) >= 7 and len(approx) <= 9) and area > AREA_MIN:
-        if (len(approx) >= 4) and area > AREA_MIN:
+        if (len(approx) > 4) and area > AREA_MIN:
 
             # aspect ratio should be around 1 for a circle
             x,y,w,h = cv2.boundingRect(approx)
@@ -228,22 +228,30 @@ def find_cargo(contours,params):
             
             # the area of the circle contour should be some amount < area of the bounding rect of the circle contour
             area = cv2.contourArea(approx)
-            """
+            
             if (w > 0):
                 extent = area / (w * h)
             else:
                 extent = 0
-            """
+
+            (x,y),radius = cv2.minEnclosingCircle(approx)
+            area_min_circle = math.pi * (radius * radius)
+            area_ratio = area / area_min_circle
             
             #if DEBUG_MODE == True:
-            #    print("ar=%f,a=%f" % (aspect_ratio,area))
+            #   print("before aspect=%f,a=%f,ex=%f,ratio=%f" % (aspect_ratio,area,extent,area_ratio))
 
-            if ((aspect_ratio >= ASPECT_RATIO_OF_1_MIN/100 and aspect_ratio <= ASPECT_RATIO_OF_1_MAX/100 )):
-                (x,y),radius = cv2.minEnclosingCircle(approx)
-                x_adjusted = x + X_PIXEL_ADJUSTMENT
-                y_adjusted = y + Y_PIXEL_ADJUSTMENT
-                cargo.append((area,(x_adjusted,y_adjusted),radius))
-            
+            if (area_ratio > 0.8):
+                        
+                if ((aspect_ratio >= ASPECT_RATIO_OF_1_MIN/100 and aspect_ratio <= ASPECT_RATIO_OF_1_MAX/100 )):
+                        #if DEBUG_MODE == True:
+                        #   print("after aspect=%f,a=%f,ex=%f,ratio=%f" % (aspect_ratio,area,extent,area_ratio))
+
+                        (x,y),radius = cv2.minEnclosingCircle(approx)
+                        x_adjusted = x + X_PIXEL_ADJUSTMENT
+                        y_adjusted = y + Y_PIXEL_ADJUSTMENT
+                        cargo.append((area,(x_adjusted,y_adjusted),radius))
+
     return cargo
 
 def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo):
@@ -258,11 +266,11 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
 
     for i in range(num_cargo):
         cam_distance = look_up_distance_y(blue_cargo[i][1][1]) # blue_cargo[i][1][1] is the y-pixel at this point in the list
-        print("by=%d" % (blue_cargo[i][1][1]))
+        #print("by=%d" % (blue_cargo[i][1][1]))
 
         cam_angle_of_horizontal = calc_horizontal_angle_of(blue_cargo[i][1][0]) # blue_cargo[i][1][0] is the x-pixel at this point in the list
 
-        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE.value)
+        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE.value,1)
 
         nt.putString("Cargo",cargo_data)
         if DEBUG_MODE == True:
@@ -280,10 +288,10 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
 
     for i in range(num_cargo):
         cam_distance = look_up_distance_y(red_cargo[i][1][1]) # red_cargo[i][1][1] is the y-pixel at this point in the list
-        print("ry=%d" % (red_cargo[i][1][1]))
+        #print("ry=%d" % (red_cargo[i][1][1]))
         cam_angle_of_horizontal = calc_horizontal_angle_of(red_cargo[i][1][0]) # red_cargo[i][1][0] is the x-pixel at this point in the list
 
-        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED.value)
+        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED.value,0)
 
         nt.putString("Cargo",cargo_data)
        
