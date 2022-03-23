@@ -16,7 +16,7 @@ import sys
 
 DEBUG_MODE = False
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
-PARAMETERS_FILENAME = "Latest working params"
+PARAMETERS_FILENAME = "st_joe_playoff"
 LOAD_FILE = True
 HORIZONTAL_FOV = 90
 # From refernce drawing:
@@ -34,6 +34,7 @@ RIO_IP = "10.9.10.2"
 REMOVE_ENDS_FROM_5 = False
 X_PIXEL_ADJUSTMENT = 0
 Y_PIXEL_ADJUSTMENT = 0
+SHOOTER_FILTER_Y_MAX = 140
 
 def look_up_distance_y(y_pixel):
     return(0)
@@ -54,12 +55,13 @@ def find_min_x(contours):
     c_index = -1
 
     for c in range(len(contours)):
-        for p in range(len(contours[c])):
-            for x,y in (contours[c][p]):
-                if (x < min_x):
-                    min_x = x
-                    min_x_index = p
-                    c_index = c
+        if cv2.contourArea(contours[c]) > 10:
+            for p in range(len(contours[c])):
+                for x,y in (contours[c][p]):
+                    if ( x < min_x):
+                        min_x = x
+                        min_x_index = p
+                        c_index = c
 
     return c_index, min_x_index
 
@@ -69,12 +71,13 @@ def find_max_x(contours):
     c_index = -1
 
     for c in range(len(contours)):
-        for p in range(len(contours[c])):
-            for x,y in (contours[c][p]):
-                if ( x > max_x):
-                    max_x = x
-                    max_x_index = p
-                    c_index = c
+        if cv2.contourArea(contours[c]) > 10:
+            for p in range(len(contours[c])):
+                for x,y in (contours[c][p]):
+                    if ( x > max_x):
+                        max_x = x
+                        max_x_index = p
+                        c_index = c
 
     return c_index, max_x_index
 
@@ -182,11 +185,11 @@ def output_data(loops,current_time,calc_time,cam_distance,cam_angle_of_horizonta
     if DEBUG_MODE == True:
         print( hub_data)
 
-def draw_target(img,points):
+def draw_target(img,x,y):
 
     if DEBUG_MODE == True:
         #print(pts)
-        img = cv2.polylines(img, [points], True, (0,0,255), 3)
+        img = cv2.circle(img, (x,y), 8, (0,0,255), -1)
 
     return(img)
 
@@ -323,67 +326,43 @@ while True:
     # kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
     # cleaner_mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-    contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-    #cv2.drawContours(image, contours, -1, (0,255,0), 3)
+    raw_contours,_ = cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    #cv2.drawContours(image, raw_contours, -1, (0,255,0), 3)
 
-    l = len(contours)
-    #print(l)
-    if (l == 3 or l == 4 or l == 5):
+    l = len(raw_contours)
+    print(l)
 
-        if (l == 5):
+    if (l > 2 and l < 20):
 
-            if (REMOVE_ENDS_FROM_5 == True):
-                # because they are often not fully visible at the far left and far right, remove far left and far right
-                # find them first
-                c_min_x, p_min_x = find_min_x(contours)
-                c_max_x, p_max_x = find_max_x(contours)
-       
-                # then remove them
-                contours.pop(c_min_x)
-                contours.pop(c_max_x)
-       
-        elif (l == 4):
-   
-            # find farthest down (this should be on far left or on far right)
-            c_max_y, p_max_y = find_max_y(contours)
+        min_top_list = []
 
-            # remove the farthest down contour
-            contours.pop(c_max_y)
-
-        # find farthest left and right
-        c_min_x, p_min_x = find_min_x(contours)
-        c_max_x, p_max_x = find_max_x(contours)
-
-        # find top most
-        c_min_y, p_min_y = find_min_y(contours)
-        #Hub center = center of bounding rectangle of top most
-        x,y,w,h = cv2.boundingRect(contours[c_min_y][p_min_y])
-        x = x + X_PIXEL_ADJUSTMENT
-        y = y + Y_PIXEL_ADJUSTMENT
-        hub_x = round(x + (w/2))
-        hub_y = round(y + (h/2))
-    
-        # these are for distance if distance is done by x (width), and also used for drawing target on image
-        min_x_x = contours[c_min_x][p_min_x][0][0]
-        max_x_x = contours[c_max_x][p_max_x][0][0]
+        for c in raw_contours:
+            if(cv2.contourArea(c) > 15):
+                x,y,w,h = cv2.boundingRect(c)
+                if (w > h):
+                    #see extreme points in open cv contour properties documentation
+                    min_top = tuple(c[c[:,:,1].argmin()][0])
+                    if (min_top[1] > SHOOTER_FILTER_Y_MAX):
+                        min_top_list.append(min_top)
         
-        cam_distance = look_up_distance_y(hub_y) # (if camera is in fixed position)
-        #cam_distance = look_up_distance_x(max_x_x - min_x_x) # x-pixel width (if camera is on shooter)
-        cam_angle_of_horizontal = calc_horizontal_angle_of(hub_x) # x coordinate of top most
-        cam_angle_of_vertical = calc_vertical_angle_of(hub_y) # y coordinate of top most
+        if (len(min_top_list) > 0):
+            min_top_x = 0
+            min_top_y = 999
+            for point in min_top_list:
+                if point[1] < min_top_y:
+                    min_top_y = point[1]
+                    min_top_x = point[0]
 
-        # loop time
-        end_time_pi = time.process_time()
-        calc_time = end_time_pi - start_time_pi
-        loops = loops + 1
-        output_data(loops,start_time_robot,calc_time,cam_distance,cam_angle_of_horizontal,0)
+            cam_distance = look_up_distance_y(min_top_y) #  y-coordinate of top most
+            cam_angle_of_horizontal = calc_horizontal_angle_of(min_top_x) # x-coordinate of top most
 
-        # get remaining points to draw hub target
-        min_x_y = contours[c_min_x][p_min_x][0][1]
-        max_x_y = contours[c_max_x][p_max_x][0][1]
-    
-        pts = np.array([[min_x_x,min_x_y],[hub_x,hub_y],[max_x_x,max_x_y]], np.int32)
-        image = draw_target(image,pts)
+            # loop time
+            end_time_pi = time.process_time()
+            calc_time = end_time_pi - start_time_pi
+            loops = loops + 1
+            output_data(loops,start_time_robot,calc_time,0,cam_angle_of_horizontal,0)
+            
+            image = draw_target(image, min_top_x, min_top_y)
 
     # update all the images
     cv2.imshow("RPiVideo",image)
@@ -400,4 +379,3 @@ while True:
 # cleanup
 cv2.destroyAllWindows()
 vs.stop()
-
