@@ -1,0 +1,18 @@
+[params_section]
+blue h1 = 83
+blue s1 = 142
+blue v1 = 225
+blue h2 = 180
+blue s2 = 255
+blue v2 = 255
+red h1 = 163
+red s1 = 52
+red v1 = 115
+red h2 = 180
+red s2 = 127
+red v2 = 255
+aspect ratio min = 1
+aspect ratio max = 1
+extent max = 0
+gamma = 168
+
