@@ -14,6 +14,7 @@ import sys
 from enum import Enum
 from networktables import NetworkTables
 import math
+import RPi.GPIO as GPIO
 
 RIO_IP = "10.9.10.2"
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
@@ -50,6 +51,10 @@ Y_PIXEL_ADJUSTMENT = 0
 class CargoColor(Enum):
     BLUE = 1
     RED = 2
+
+class CargoCameraType(Enum):
+    LEFT = 0
+    RIGHT = 1
 
 def callback(pos):
     pass
@@ -270,7 +275,7 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
 
         cam_angle_of_horizontal = calc_horizontal_angle_of(blue_cargo[i][1][0]) # blue_cargo[i][1][0] is the x-pixel at this point in the list
 
-        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE.value,1)
+        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.BLUE.value,camera_location)
 
         nt.putString("Cargo",cargo_data)
         if DEBUG_MODE == True:
@@ -291,7 +296,7 @@ def output_data(loops, current_time, calc_time, blue_cargo, red_cargo, max_cargo
         #print("ry=%d" % (red_cargo[i][1][1]))
         cam_angle_of_horizontal = calc_horizontal_angle_of(red_cargo[i][1][0]) # red_cargo[i][1][0] is the x-pixel at this point in the list
 
-        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED.value,0)
+        cargo_data = "%d,%8.3f,%8.3f,%8.3f,%8.3f,%d,%d" % (loops,current_time,calc_time,cam_distance,cam_angle_of_horizontal,CargoColor.RED.value,camera_location)
 
         nt.putString("Cargo",cargo_data)
        
@@ -408,6 +413,8 @@ def regress(x):
 
 loops = 0
 
+camera_location = None
+
 # determine debug mode depending on how the program was run
 if len(sys.argv) == 3:
 
@@ -420,6 +427,16 @@ if len(sys.argv) == 3:
         OUTPUT_MODE = True
     else:
         OUTPUT_MODE = False
+
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(8, GPIO.IN)
+if GPIO.input(8):
+    camera_location = CargoCameraType.LEFT.value
+    print("Pin 8 is HIGH-LEFT CAMERA")
+else:
+    camera_location = CargoCameraType.RIGHT.value
+    print("Pin 8 is LOW-RIGHT CAMERA")
+
 
 NetworkTables.initialize(RIO_IP)
 NetworkTables.setUpdateRate(0.010)
