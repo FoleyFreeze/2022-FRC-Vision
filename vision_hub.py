@@ -1,9 +1,13 @@
 #!/usr/bin/python3.9
+from audioop import reverse
 from calendar import c
+import enum
+from operator import itemgetter
 from sre_parse import FLAGS
-from tkinter import Y
+from tkinter import LEFT, RIGHT, TOP, Y
 from typing import Counter
 import cv2
+import numpy
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 from threading import Thread
@@ -13,6 +17,7 @@ import PySimpleGUI as sg
 import configparser
 from networktables import NetworkTables
 import sys
+from enum import Enum
 
 DEBUG_MODE = False
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
@@ -35,6 +40,11 @@ REMOVE_ENDS_FROM_5 = False
 X_PIXEL_ADJUSTMENT = 0
 Y_PIXEL_ADJUSTMENT = 0
 SHOOTER_FILTER_Y_MAX = 140
+
+class ExtremePoints(Enum):
+    TOP = 1
+    RIGHT = 2
+    BOTTOM = 3
 
 def look_up_distance_y(y_pixel):
     return(0)
@@ -258,6 +268,76 @@ def show_x_and_y(event, x, y, flags, userdata):
     if event == cv2.EVENT_LBUTTONDOWN:
         print('({x},{y})'.format(x=x,y=y))
 
+def make_extreme_points_list(contours,location):
+    extreme_points_list =[]
+    for c in contours:
+        if(cv2.contourArea(c) > 15):
+            x,y,w,h = cv2.boundingRect(c)
+            if (w > h):
+                if location == ExtremePoints.TOP:
+                    #see extreme points in open cv contour properties documentation
+                    point = tuple(c[c[:,:,1].argmin()][0])
+                elif location == ExtremePoints.LEFT:
+                    # do what is diff for left here
+                    point = tuple(c[c[:,:,0].argmin()][0])           
+                elif location == ExtremePoints.RIGHT:
+                    point = tuple(c[c[:,:,0].argmax()][0])           
+                    # do what is diff for right here
+                else:
+                    extreme_points_list =[]
+                    # this is an error case, because it isn't top, it isn't right and it isn't left
+
+                if (point[1] > SHOOTER_FILTER_Y_MAX):
+                    extreme_points_list.append(point)
+    return extreme_points_list
+    
+def find_hub_by_top(contours):
+    y = -1
+    x = -1
+    
+    top_list = make_extreme_points_list(contours, ExtremePoints.TOP)
+    if len(top_list) > 0:
+        top_list.sort(key=itemgetter(1)) #after sort top_list[0] is the topmost
+        x = top_list[0][0]
+        y = top_list[0][1]
+
+    return x, y
+
+def find_hub_by_midpoint(contours):
+    y = -1
+    x = -1
+    
+    left_list = make_extreme_points_list(contours, ExtremePoints.LEFT)
+    right_list = make_extreme_points_list(contours, ExtremePoints.RIGHT)
+
+    if len(left_list) > 0 and len(right_list) > 0:
+        left_list.sort(key=itemgetter(0))
+        right_list.sort(key=itemgetter(0), reverse = True)
+        x = (left_list[0][0] + right_list[0][0]) / 2
+        y = (left_list[0][1] + right_list[0][1]) / 2
+
+    return x, y
+
+def find_hub_by_circle(contours):
+    y = -1
+    x = -1
+    
+    left_list = make_extreme_points_list(contours, ExtremePoints.LEFT)
+    right_list = make_extreme_points_list(contours, ExtremePoints.RIGHT)
+    top_list = make_extreme_points_list(contours, ExtremePoints.TOP)
+
+    if len(left_list) > 0 and len(right_list) > 0 and len(top_list) > 0:
+        left_list.sort(key=itemgetter(0))
+        right_list.sort(key=itemgetter(0), reverse = True)
+        top_list.sort(key=itemgetter(1))
+
+        # format points for contours; first point is top, the rest are counter-clockwise
+        circle_points = [ [top_list[0][0], top_list[0][1]], [left_list[0][0], left_list[0][1]], [right_list[0][0], right_list[0][1]] ] 
+
+        circle_contour = np.array(circle_points).reshape((-1,1,2)).astype(numpy.int32)
+        (x,y), radius = cv2.minEnclosingCircle(circle_contour)
+
+    return x, y
 # START
 
 # determine debug mode depending on how the program was run
@@ -291,6 +371,7 @@ callback_set = False
 
 loops = 0
 
+find_hub = find_hub_by_top
 
 while True:
 
@@ -334,35 +415,19 @@ while True:
 
     if (l > 2 and l < 20):
 
-        min_top_list = []
-
-        for c in raw_contours:
-            if(cv2.contourArea(c) > 15):
-                x,y,w,h = cv2.boundingRect(c)
-                if (w > h):
-                    #see extreme points in open cv contour properties documentation
-                    min_top = tuple(c[c[:,:,1].argmin()][0])
-                    if (min_top[1] > SHOOTER_FILTER_Y_MAX):
-                        min_top_list.append(min_top)
-        
-        if (len(min_top_list) > 0):
-            min_top_x = 0
-            min_top_y = 999
-            for point in min_top_list:
-                if point[1] < min_top_y:
-                    min_top_y = point[1]
-                    min_top_x = point[0]
-
-            cam_distance = look_up_distance_y(min_top_y) #  y-coordinate of top most
-            cam_angle_of_horizontal = calc_horizontal_angle_of(min_top_x) # x-coordinate of top most
+        x, y = find_hub(raw_contours) 
+        if x != -1 and x != -1:
+            
+            cam_distance = look_up_distance_y(y) #  y-coordinate of top most
+            cam_angle_of_horizontal = calc_horizontal_angle_of(x) # x-coordinate of top most
 
             # loop time
             end_time_pi = time.process_time()
             calc_time = end_time_pi - start_time_pi
             loops = loops + 1
             output_data(loops,start_time_robot,calc_time,0,cam_angle_of_horizontal,0)
-            
-            image = draw_target(image, min_top_x, min_top_y)
+                
+            image = draw_target(image, x, y)
 
     # update all the images
     cv2.imshow("RPiVideo",image)
