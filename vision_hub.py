@@ -284,7 +284,7 @@ def make_extreme_points_list(contours,location):
                     point = tuple(c[c[:,:,0].argmax()][0])           
                     # do what is diff for right here
                 else:
-                    extreme_points_list =[]
+                    sys.exit("make_extreme_points_list: invalid location"
                     # this is an error case, because it isn't top, it isn't right and it isn't left
 
                 if (point[1] > SHOOTER_FILTER_Y_MAX):
