@@ -59,27 +59,44 @@ class CargoCameraType(Enum):
 def callback(pos):
     pass
 
-# for writing parameters file to be used upon next run
+# for writing parameters file to be used upon next run and puts parameters in network table pi
 def write_params_file(file):
     print("Writing parameter file " + file)
     config = configparser.ConfigParser()
     config.add_section('params_section')
     config['params_section']['blue H1'] = str(cv2.getTrackbarPos("blue H1","trackbars"))
+    nt.putString("blue H1", str(config['params_section']['blue H1']))
     config['params_section']['blue S1'] = str(cv2.getTrackbarPos("blue S1","trackbars"))
+    nt.putString("blue S1", str(config['params_section']['blue S1']))
     config['params_section']['blue V1'] = str(cv2.getTrackbarPos("blue V1","trackbars"))
+    nt.putString("blue V1", str(config['params_section']['blue V1']))
     config['params_section']['blue H2'] = str(cv2.getTrackbarPos("blue H2","trackbars"))
+    nt.putString("blue H2", str(config['params_section']['blue H2']))
     config['params_section']['blue S2'] = str(cv2.getTrackbarPos("blue S2","trackbars"))
+    nt.putString("blue S2", str(config['params_section']['blue S2']))
     config['params_section']['blue V2'] = str(cv2.getTrackbarPos("blue V2","trackbars"))
+    nt.putString("blue V2", str(config['params_section']['blue V2']))
     config['params_section']['red H1'] = str(cv2.getTrackbarPos("red H1","trackbars"))
+    nt.putString("red H1", str(config['params_section']['red H1']))
     config['params_section']['red S1'] = str(cv2.getTrackbarPos("red S1","trackbars"))
+    nt.putString("red S1", str(config['params_section']['red S1']))
     config['params_section']['red V1'] = str(cv2.getTrackbarPos("red V1","trackbars"))
+    nt.putString("red V1", str(config['params_section']['red V1']))
     config['params_section']['red H2'] = str(cv2.getTrackbarPos("red H2","trackbars"))
+    nt.putString("red H2", str(config['params_section']['red H2']))
     config['params_section']['red S2'] = str(cv2.getTrackbarPos("red S2","trackbars"))
+    nt.putString("red S2", str(config['params_section']['red S2']))
     config['params_section']['red V2'] = str(cv2.getTrackbarPos("red V2","trackbars"))
+    nt.putString("red V2", str(config['params_section']['red V2']))
     config['params_section']['aspect ratio min'] = str(cv2.getTrackbarPos("aspect ratio min","trackbars"))
+    nt.putString("aspect ratio min", str(config['params_section']['aspect ratio min']))
     config['params_section']['aspect ratio max'] = str(cv2.getTrackbarPos("aspect ratio max","trackbars"))
+    nt.putString("aspect ratio max", str(config['params_section']['aspect ratio max']))
     config['params_section']['extent max'] = str(cv2.getTrackbarPos("extent max","trackbars"))
+    nt.putString("extent max", str(config['params_section']['extent max']))
     config['params_section']['gamma'] = str(cv2.getTrackbarPos("gamma","trackbars"))
+    nt.putString("gamma", str(config['params_section']['gamma']))
+
     with open(file, 'w') as configfile:
         config.write(configfile)
 
