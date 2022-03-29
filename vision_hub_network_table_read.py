@@ -1,0 +1,60 @@
+#!/usr/bin/python3.9
+from audioop import reverse
+from distutils.debug import DEBUG
+from operator import itemgetter
+import cv2
+from picamera.array import PiRGBArray
+from picamera import PiCamera
+from threading import Thread
+import time
+import numpy as np
+import PySimpleGUI as sg
+import configparser
+import sys
+from enum import Enum
+from networktables import NetworkTables
+import math
+import RPi.GPIO as GPIO
+
+RIO_IP = "10.9.10.2"
+DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
+
+# for writing parameters file to be used upon next run and puts parameters in network table pi
+def write_params_file(file):
+    print("Writing parameter file " + file)
+    config = configparser.ConfigParser()
+    config.add_section('params_section')
+    config['params_section']['H1'] = str(nt.getString("H1", "0"))
+    config['params_section']['S1'] = str(nt.getString("S1", "0"))
+    config['params_section']['V1'] = str(nt.getString("V1", "0"))
+    config['params_section']['H2'] = str(nt.getString("H2", "0"))
+    config['params_section']['S2'] = str(nt.getString("S2", "0"))
+    config['params_section']['V2'] = str(nt.getString("V2", "0"))
+    config['params_section']['min cargo area'] = str(nt.getString("min cargo area", "0"))
+
+    with open(file, 'w') as configfile:
+        config.write(configfile)
+        print("Wrote parameter file " + file)
+
+# START
+
+# determine debug mode depending on how the program was run
+if len(sys.argv) == 2:
+
+    params_file_name = sys.argv[1] 
+
+elif len(sys.argv) == 1:
+
+    params_file_name = DEFAULT_PARAMETERS_FILENAME 
+
+else:
+
+    sys.exit("invalid command line")
+
+NetworkTables.initialize(RIO_IP)
+NetworkTables.setUpdateRate(0.010)
+nt = NetworkTables.getTable("pi")
+
+time.sleep(3)
+
+write_params_file(params_file_name)
