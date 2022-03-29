@@ -14,7 +14,6 @@ import sys
 from enum import Enum
 from networktables import NetworkTables
 import math
-import RPi.GPIO as GPIO
 
 RIO_IP = "10.9.10.2"
 DEFAULT_PARAMETERS_FILENAME = "default-params.ini"
@@ -433,7 +432,7 @@ loops = 0
 camera_location = None
 
 # determine debug mode depending on how the program was run
-if len(sys.argv) == 3:
+if len(sys.argv) == 4:
 
     if sys.argv[1] == "debug":
         DEBUG_MODE = True
@@ -444,16 +443,13 @@ if len(sys.argv) == 3:
         OUTPUT_MODE = True
     else:
         OUTPUT_MODE = False
-
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(8, GPIO.IN)
-if GPIO.input(8):
-    camera_location = CargoCameraType.LEFT.value
-    print("Pin 8 is HIGH-LEFT CAMERA")
-else:
-    camera_location = CargoCameraType.RIGHT.value
-    print("Pin 8 is LOW-RIGHT CAMERA")
-
+    
+    if sys.argv[3] == "left":
+        camera_location = CargoCameraType.LEFT.value
+        print("LEFT CAMERA")
+    else:
+        camera_location = CargoCameraType.RIGHT.value
+        print("RIGHT CAMERA")
 
 NetworkTables.initialize(RIO_IP)
 NetworkTables.setUpdateRate(0.010)
