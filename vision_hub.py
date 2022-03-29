@@ -140,12 +140,19 @@ def write_params_file(file):
     config = configparser.ConfigParser()
     config.add_section('params_section')
     config['params_section']['H1'] = str(cv2.getTrackbarPos("H1","app config"))
+    nt.putString("H1", str(config['params_section']['H1']))
     config['params_section']['S1'] = str(cv2.getTrackbarPos("S1","app config"))
+    nt.putString("S1", str(config['params_section']['S1']))
     config['params_section']['V1'] = str(cv2.getTrackbarPos("V1","app config"))
+    nt.putString("V1", str(config['params_section']['V1']))
     config['params_section']['H2'] = str(cv2.getTrackbarPos("H2","app config"))
+    nt.putString("H2", str(config['params_section']['H2']))
     config['params_section']['S2'] = str(cv2.getTrackbarPos("S2","app config"))
+    nt.putString("S2", str(config['params_section']['S2']))
     config['params_section']['V2'] = str(cv2.getTrackbarPos("V2","app config"))
+    nt.putString("V2", str(config['params_section']['V2']))
     config['params_section']['min cargo area'] = str(cv2.getTrackbarPos("min cargo area","app config"))
+    nt.putString("min cargo area", str(config['params_section']['min cargo area']))
     with open(file, 'w') as configfile:
         config.write(configfile)
 
@@ -284,7 +291,7 @@ def make_extreme_points_list(contours,location):
                     point = tuple(c[c[:,:,0].argmax()][0])           
                     # do what is diff for right here
                 else:
-                    sys.exit("make_extreme_points_list: invalid location"
+                    sys.exit("make_extreme_points_list: invalid location")
                     # this is an error case, because it isn't top, it isn't right and it isn't left
 
                 if (point[1] > SHOOTER_FILTER_Y_MAX):
