@@ -3,7 +3,7 @@
 cd /home/pi/2022-FRC-Vision
 echo "starting vision cargo"
 sleep 3
-python3 vision_cargo.py debug output
+python3 vision_cargo.py debug output right
 echo "ending vision cargo"
 sleep 3
 exit
