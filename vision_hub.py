@@ -378,7 +378,7 @@ callback_set = False
 
 loops = 0
 
-find_hub = find_hub_by_top
+find_hub = find_hub_by_midpoint
 
 while True:
 
